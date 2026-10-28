@@ -1,0 +1,66 @@
+.tracking-control {
+  min-inline-size: 0;
+  border: 0;
+  padding: 0;
+  margin: 1.1875rem 0 0;
+}
+.tracking-control legend { font-size: .625rem; font-weight: 500; padding: 0; }
+.tracking-values {
+  display: flex;
+  justify-content: space-between;
+  margin-top: .625rem;
+  font-size: .625rem;
+  color: #737966;
+  font-variant-numeric: tabular-nums;
+}
+.tracking-values output:first-child { color: #7c8a70; }
+.tracking-values output:last-child { color: #b1785a; }
+.tracking-sliders {
+  position: relative;
+  height: 1.625rem;
+  margin-top: .1875rem;
+  background: linear-gradient(to right, #d7d9cd var(--tracking-start), #8e987d var(--tracking-start), #8e987d var(--tracking-end), #d7d9cd var(--tracking-end)) center / 100% .125rem no-repeat;
+}
+.tracking-zero { position: absolute; left: 50%; height: .375rem; width: .0625rem; top: .625rem; background: #adb59e; pointer-events: none; }
+.tracking-sliders input {
+  appearance: none;
+  position: absolute;
+  top: 0;
+  height: 1.625rem;
+  width: 50%;
+  margin: 0;
+  background: transparent;
+  cursor: ew-resize;
+  pointer-events: none;
+}
+#tracking-min { left: 0; }
+#tracking-max { right: 0; }
+.tracking-sliders input::-webkit-slider-runnable-track { height: .125rem; background: transparent; }
+.tracking-sliders input::-moz-range-track { height: .125rem; background: transparent; }
+.tracking-sliders input::-webkit-slider-thumb {
+  appearance: none;
+  pointer-events: auto;
+  height: .75rem;
+  width: .75rem;
+  border: .125rem solid #758064;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: 0 0 0 .125rem #f5f5ef;
+  margin-top: -.3125rem;
+}
+.tracking-sliders input::-moz-range-thumb {
+  pointer-events: auto;
+  height: .5rem;
+  width: .5rem;
+  border: .125rem solid #758064;
+  border-radius: 50%;
+  background: var(--paper);
+}
+#tracking-max::-webkit-slider-thumb { border-color: #b1785a; }
+#tracking-max::-moz-range-thumb { border-color: #b1785a; }
+.tracking-sliders input:focus-visible { outline-offset: .125rem; }
+.tracking-control .control-note { margin-top: .625rem; }
+@media (max-width: 47.5rem) {
+  .tracking-control legend { font-size: .6875rem; }
+  .tracking-sliders input::-webkit-slider-thumb { width: .9375rem; height: .9375rem; margin-top: -.40625rem; }
+}

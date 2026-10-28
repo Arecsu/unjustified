@@ -1,0 +1,794 @@
+@media (min-width:96.875rem) {
+  .hero {
+    padding-top: 4.375rem;
+    padding-bottom: 3.75rem;
+  }
+  .hero-note {
+    max-width: 25rem;
+  }
+  .hero-note p {
+    font-size: 0.8125rem;
+  }
+  .hero-note p:first-child {
+    font-size: 0.875rem;
+  }
+  .workspace {
+    grid-template-columns: 15.625rem minmax(0,1fr);
+  }
+  .controls {
+    padding-left: 1.75rem;
+    padding-right: 1.75rem;
+  }
+  .composition-area {
+    padding: 1.4375rem 1.75rem;
+  }
+  .paper-body {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+@media (max-width:78.125rem) {
+  .site-header {
+    padding: 0 2rem;
+    gap: 2.5rem;
+  }
+  main {
+    padding: 0 2rem;
+  }
+  .hero {
+    align-items: flex-start;
+  }
+  .hero h1 {
+    font-size: 3.6875rem;
+    letter-spacing: -0.175rem;
+    white-space: normal;
+    max-width: 33.75rem;
+  }
+  .hero-note {
+    max-width: 19.0625rem;
+    padding-top: 2.1875rem;
+  }
+  .hero-note p {
+    font-size: 0.6875rem;
+  }
+  .hero-note p:first-child {
+    font-size: 0.75rem;
+  }
+  .hero-note a {
+    font-size: 0.5625rem;
+  }
+  .workspace {
+    grid-template-columns: 13.125rem minmax(0,1fr);
+  }
+  .controls {
+    padding: 1.5625rem 1.1875rem;
+  }
+  .composition-area {
+    padding: 1.1875rem 1.0625rem;
+  }
+  .paper-header {
+    padding: 0 1.125rem;
+  }
+  .paper-body {
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+  .paper-header h3 {
+    font-size: 0.625rem;
+  }
+  .paper-header .paper-tag {
+    font-size: 0.375rem;
+  }
+  .paper-footer {
+    padding: 0.875rem 1.0625rem;
+    font-size: 0.4375rem;
+  }
+  .metrics>div {
+    padding: 0 0.875rem;
+  }
+  .metrics strong {
+    font-size: 1.375rem;
+  }
+  .metrics strong>span {
+    font-size: 1.125rem;
+  }
+  .metrics>div>span {
+    font-size: 0.375rem;
+  }
+  .metrics small {
+    font-size: 0.40625rem;
+  }
+  .method-section {
+    gap: 3.75rem;
+  }
+  .site-footer {
+    margin: 0 2rem;
+  }
+  .source-card {
+    padding: 1.25rem;
+  }
+  .source-card h3 {
+    font-size: 1.375rem;
+  }
+}
+@media (max-width:67.5rem) {
+  .workspace {
+    grid-template-columns: minmax(0,1fr);
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.875rem;
+    padding: 1.5625rem 1.75rem;
+    border-right: 0;
+    border-bottom: 0.0625rem solid #d9dbd0;
+    align-items: start;
+  }
+  .control-section+.control-section {
+    border: 0;
+    border-left: 0.0625rem solid var(--line);
+    margin: 0;
+    padding: 0 0 0 1.75rem;
+  }
+  .control-section h2 {
+    margin-bottom: 1.125rem;
+  }
+  .controls .reset-button {
+    grid-column: 3;
+    margin-top: -2.5rem;
+    align-self: end;
+    justify-self: start;
+    margin-left: 1.75rem;
+  }
+  .controls .range-control {
+    margin-top: 1rem;
+  }
+  .control-note {
+    margin-top: 0.5rem;
+  }
+  .display-controls {
+    align-self: stretch;
+  }
+  .display-controls>.toggle-row {
+    margin-top: 0.625rem;
+  }
+  .comparison-bar {
+    margin: 0 0 1.25rem;
+  }
+  .composition-area {
+    padding: 1.4375rem 1.625rem;
+  }
+  .paper-header {
+    height: 3.8125rem;
+    padding: 0 1.4375rem;
+  }
+  .paper-header h3 {
+    font-size: 0.75rem;
+  }
+  .paper-header .paper-tag {
+    font-size: 0.375rem;
+  }
+  .paper-body {
+    padding: 1.4375rem;
+  }
+  .paper-footer {
+    font-size: 0.5rem;
+    padding: 0.9375rem 1.375rem;
+  }
+  .metrics strong {
+    font-size: 1.6875rem;
+  }
+  .metrics strong>span {
+    font-size: 1.375rem;
+  }
+  .metrics>div>span {
+    font-size: 0.5rem;
+  }
+  .metrics small {
+    font-size: 0.5rem;
+  }
+  .metrics>div {
+    padding: 0 1.375rem;
+  }
+  .hero {
+    gap: 1.25rem;
+    padding-top: 2.8125rem;
+    padding-bottom: 2.5rem;
+  }
+  .hero h1 {
+    max-width: 28.125rem;
+    font-size: 3.625rem;
+  }
+  .hero-note {
+    max-width: 18.125rem;
+    padding-top: 2rem;
+  }
+  .edition {
+    font-size: 0.5rem;
+  }
+  .edition span {
+    display: none;
+  }
+  .site-header nav {
+    font-size: 0.6875rem;
+    gap: 1.375rem;
+  }
+  .site-header {
+    gap: 2.1875rem;
+    height: 5.125rem;
+  }
+  .brand {
+    font-size: 1.5625rem;
+  }
+  .method-section {
+    gap: 2.5rem;
+    padding-top: 3.75rem;
+    padding-bottom: 3.4375rem;
+  }
+  .source-card h3 {
+    font-size: 1.3125rem;
+  }
+  .source-meta {
+    font-size: 0.375rem;
+  }
+  .source-card p {
+    font-size: 0.5625rem;
+  }
+  .source-link {
+    font-size: 0.4375rem;
+  }
+}
+@media (max-width:47.5rem) {
+  .site-header {
+    padding: 0 1.375rem;
+    height: 4.75rem;
+    gap: 1.875rem;
+  }
+  .site-header .brand {
+    font-size: 1.5rem;
+  }
+  .brand-mark {
+    margin-right: 0.5rem;
+    width: 1.4375rem;
+  }
+  .brand-mark i {
+    width: 1.375rem;
+  }
+  .brand-mark i:nth-child(2) {
+    width: 0.9375rem;
+  }
+  .brand-mark i:nth-child(3) {
+    width: 1.1875rem;
+  }
+  .brand-mark i:nth-child(4) {
+    width: 0.6875rem;
+  }
+  .edition {
+    display: none;
+  }
+  .site-header nav {
+    margin-left: auto;
+    gap: 1.25rem;
+    font-size: 0.625rem;
+  }
+  main {
+    padding: 0 1.375rem;
+  }
+  .hero {
+    display: block;
+    padding: 2.25rem 0;
+  }
+  .hero h1 {
+    font-size: clamp(2.6875rem,8vw,3.8125rem);
+    letter-spacing: -0.15625rem;
+    max-width: none;
+    white-space: normal;
+  }
+  .hero-note {
+    max-width: none;
+    padding-top: 1.25rem;
+  }
+  .hero-note p {
+    font-size: 0.75rem;
+    line-height: 1.7;
+  }
+  .hero-note p:first-child {
+    font-size: 0.8125rem;
+  }
+  .desktop-break {
+    display: none;
+  }
+  .hero-note a {
+    margin-top: 0.75rem;
+    font-size: 0.625rem;
+  }
+  .eyebrow {
+    font-size: 0.5rem;
+    letter-spacing: 0.08125rem;
+  }
+  .hero .eyebrow {
+    font-size: 0.5rem;
+  }
+  .lab-toolbar {
+    height: 3.6875rem;
+    padding: 0 1.125rem;
+  }
+  .lab-toolbar .eyebrow {
+    font-size: 0.5rem;
+    letter-spacing: 0.06875rem;
+    gap: 0.625rem;
+  }
+  .live-tag {
+    display: none;
+  }
+  .toolbar-actions {
+    gap: 0.75rem;
+  }
+  .button {
+    font-size: 0.625rem;
+  }
+  .toolbar-divider {
+    height: 0.8125rem;
+  }
+  .controls {
+    display: block;
+    padding: 0 1.125rem;
+  }
+  .mobile-controls-toggle {
+    width: 100%;
+    min-height: 3.125rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: none;
+    border: 0;
+    font-size: 0.6875rem;
+    text-align: left;
+    padding: 0;
+    color: #657456;
+  }
+  .mobile-controls-toggle>span {
+    font-size: 0.5625rem;
+    color: #98a28a;
+  }
+  .controls:not(.expanded) .control-section,.controls:not(.expanded) .reset-button {
+    display: none;
+  }
+  .controls.expanded {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+  .controls.expanded .mobile-controls-toggle {
+    grid-column: 1/-1;
+    border-bottom: 0.0625rem solid var(--line);
+  }
+  .controls .control-section {
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+  .controls .display-controls {
+    grid-column: 1/-1;
+    border-top: 0.0625rem solid var(--line);
+    padding-top: 1.25rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 1.25rem;
+  }
+  .controls .display-controls h2 {
+    grid-column: 1/-1;
+    margin-bottom: 0.3125rem;
+  }
+  .controls .display-controls>.toggle-row {
+    margin: 0;
+  }
+  .controls .reset-button {
+    margin: 0 0 1.25rem;
+    grid-column: 1/-1;
+    justify-self: center;
+  }
+  .control-section h2 {
+    font-size: 0.75rem;
+  }
+  .range-control>label,.select-label,.toggle-row {
+    font-size: 0.6875rem;
+  }
+  .range-ends {
+    font-size: 0.5625rem;
+  }
+  .range-control input {
+    height: 1.6875rem;
+  }
+  .range-control input::-webkit-slider-thumb {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    margin-top: -0.40625rem;
+  }
+  .control-note {
+    font-size: 0.5625rem;
+  }
+  .controls .range-control {
+    margin-top: 1.0625rem;
+  }
+  .range-control output {
+    font-size: 0.625rem;
+  }
+  .select-wrap select {
+    min-height: 2.5rem;
+  }
+  .toggle-row {
+    min-height: 2.375rem;
+  }
+  .toggle-row input {
+    width: 2rem;
+    height: 2rem;
+  }
+  .switch {
+    width: 1.8125rem;
+    height: 1.0625rem;
+  }
+  .switch:after {
+    width: 0.6875rem;
+    height: 0.6875rem;
+  }
+  .composition-area {
+    padding: 1.1875rem 1rem;
+  }
+  .comparison-note {
+    font-size: 0.75rem;
+  }
+  .segmented button {
+    min-height: 1.8125rem;
+    font-size: 0.625rem;
+  }
+  .paper-header {
+    padding: 0 1.125rem;
+  }
+  .paper-header h3 {
+    font-size: 0.6875rem;
+  }
+  .paper-body {
+    padding: 1.375rem 1.25rem;
+  }
+  .paper-footer {
+    padding: 0.875rem 1.0625rem;
+    font-size: 0.4375rem;
+  }
+  .previews {
+    gap: 0.75rem;
+  }
+  .metrics {
+    padding: 1rem 0;
+  }
+  .metrics>div {
+    padding: 0 0.8125rem;
+  }
+  .metrics>div>span {
+    font-size: 0.375rem;
+    letter-spacing: 0.0375rem;
+  }
+  .metrics strong {
+    font-size: 1.4375rem;
+  }
+  .metrics strong>span {
+    font-size: 1.125rem;
+  }
+  .metrics small {
+    font-size: 0.4375rem;
+  }
+  .status-bar {
+    font-size: 0.5rem;
+    align-items: flex-start;
+  }
+  .status-main {
+    max-width: 60%;
+  }
+  .constraint-note {
+    font-size: 0.5rem;
+    gap: 0.4375rem;
+  }
+  .method-section {
+    grid-template-columns: 1fr;
+    gap: 1.5625rem;
+    padding: 2.8125rem 0;
+  }
+  .method-section h2 {
+    font-size: 2.0625rem;
+  }
+  .method-section>div>p {
+    max-width: 100%;
+  }
+  .method-steps {
+    gap: 1.5rem;
+  }
+  .method-steps p {
+    max-width: none;
+    font-size: 0.75rem;
+  }
+  .method-steps h3 {
+    font-size: 0.8125rem;
+  }
+  .section-heading {
+    display: block;
+  }
+  .section-heading h2 {
+    font-size: 1.75rem;
+  }
+  .research-count {
+    display: block;
+    margin-top: 0.9375rem;
+    font-size: 0.4375rem;
+  }
+  .research-section {
+    padding: 2.6875rem 0;
+  }
+  .source-grid {
+    grid-template-columns: 1fr;
+  }
+  .source-card {
+    padding: 1.4375rem;
+  }
+  .source-card h3 {
+    max-width: none;
+    font-size: 1.5625rem;
+    margin-top: 1.125rem;
+  }
+  .source-card p {
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+  .source-meta {
+    font-size: 0.5rem;
+  }
+  .source-link {
+    font-size: 0.5625rem;
+  }
+  .library-links {
+    grid-template-columns: 1fr;
+  }
+  .library-links>a {
+    padding: 1.125rem;
+  }
+  .library-links> a>div>span {
+    font-size: 0.625rem;
+    line-height: 1.6;
+  }
+  .algorithm-notes summary {
+    font-size: 0.6875rem;
+    line-height: 1.7;
+  }
+  .site-footer {
+    flex-wrap: wrap;
+    gap: 0.9375rem;
+    margin: 0 1.375rem;
+  }
+  .site-footer p {
+    order: 3;
+    flex-basis: 100%;
+    margin: 0;
+    font-size: 0.75rem;
+  }
+  .site-footer>span {
+    margin-left: auto;
+    font-size: 0.4375rem;
+  }
+  .performance-details {
+    font-size: 0.5625rem;
+  }
+  .performance-details dl {
+    grid-template-columns: 1fr;
+  }
+  .line-inspector {
+    font-size: 0.625rem;
+    gap: 0.75rem;
+  }
+  .line-inspector strong {
+    margin-left: 0;
+  }
+  dialog {
+    padding: 1.4375rem;
+  }
+  dialog h2 {
+    font-size: 1.625rem;
+  }
+  dialog label {
+    font-size: 0.75rem;
+  }
+  dialog label>span {
+    font-size: 0.5rem;
+  }
+  dialog textarea {
+    font-size: 1rem;
+    height: 16.875rem;
+  }
+  .editor-bottom {
+    gap: 0.625rem;
+  }
+  .editor-bottom>span {
+    font-size: 0.5rem;
+  }
+  .primary-button {
+    font-size: 0.625rem;
+    padding: 0.625rem 0.75rem;
+  }
+}
+@media (max-width:37.5rem) {
+  .previews {
+    grid-template-columns: minmax(0,1fr);
+    gap: 1.25rem;
+  }
+  .paper-header {
+    height: 3.625rem;
+    padding: 0 1.25rem;
+  }
+  .paper-header h3 {
+    font-size: 0.75rem;
+  }
+  .paper-header .paper-tag {
+    font-size: 0.4375rem;
+  }
+  .paper-body {
+    padding: 1.5rem 1.375rem 1.625rem;
+  }
+  .paper-footer {
+    font-size: 0.5rem;
+    padding: 0.9375rem 1.25rem;
+  }
+  .paper-index {
+    font-size: 0.75rem;
+  }
+  .comparison-note {
+    font-size: 0.6875rem;
+  }
+  .metrics strong {
+    font-size: 1.25rem;
+  }
+  .metrics strong>span {
+    font-size: 1rem;
+  }
+  .metrics strong>b {
+    margin: 0 0.125rem;
+    font-size: 0.75rem;
+  }
+  .metrics small {
+    font-size: 0.40625rem;
+  }
+  .metrics>div {
+    padding: 0 0.625rem;
+  }
+  .metrics>div>span {
+    font-size: 0.34375rem;
+    letter-spacing: 0.028125rem;
+  }
+  .status-bar {
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.9375rem 0;
+  }
+  .status-main {
+    max-width: 100%;
+  }
+  #performance {
+    padding-left: 0.625rem;
+  }
+  .focus-view .baseline-paper {
+    position: absolute;
+  }
+  .constraint-note {
+    font-size: 0.4375rem;
+  }
+  .hero h1 {
+    font-size: 2.9375rem;
+    letter-spacing: -0.15rem;
+  }
+  .hero-note p {
+    font-size: 0.6875rem;
+  }
+  .hero-note p:first-child {
+    font-size: 0.75rem;
+  }
+  .lab-toolbar>.eyebrow {
+    font-size: 0.4375rem;
+    letter-spacing: 0.0625rem;
+  }
+  .toolbar-actions {
+    gap: 0.625rem;
+  }
+  .toolbar-actions .button {
+    font-size: 0.5625rem;
+  }
+  .toolbar-actions svg {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+  .site-header {
+    gap: 1rem;
+  }
+  .site-header nav {
+    gap: 1rem;
+  }
+  .site-header nav a {
+    font-size: 0.5625rem;
+  }
+  .site-header nav a span {
+    display: none;
+  }
+  .brand-mark {
+    display: none;
+  }
+  .editor-bottom {
+    align-items: flex-end;
+  }
+  .editor-bottom>span {
+    max-width: 7.8125rem;
+  }
+  .composition-area {
+    padding: 1.0625rem 0.8125rem;
+  }
+}
+@media (max-width:23.125rem) {
+  main {
+    padding: 0 0.875rem;
+  }
+  .site-header {
+    padding: 0 1rem;
+  }
+  .site-header nav {
+    gap: 0.75rem;
+  }
+  .hero h1 {
+    font-size: 2.5625rem;
+  }
+  .hero-note p {
+    font-size: 0.625rem;
+  }
+  .lab-toolbar {
+    padding: 0 0.8125rem;
+  }
+  .paper-body {
+    padding-left: 1.0625rem;
+    padding-right: 1.0625rem;
+  }
+  .composition-area {
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+  }
+  .comparison-note {
+    font-size: 0.625rem;
+  }
+  .segmented button {
+    padding: 0.3125rem 0.5rem;
+  }
+  .constraint-note {
+    gap: 0.3125rem;
+    font-size: 0.375rem;
+  }
+  .metrics strong {
+    font-size: 1.125rem;
+  }
+  .metrics strong>span {
+    font-size: 0.875rem;
+  }
+  .metrics>div {
+    padding: 0 0.5rem;
+  }
+  .metrics>div>span {
+    font-size: 0.3125rem;
+  }
+  .site-footer {
+    margin: 0 1rem;
+  }
+  .controls.expanded {
+    column-gap: 0.9375rem;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,*:before,*:after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

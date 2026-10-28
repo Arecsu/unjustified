@@ -1,0 +1,39 @@
+.spaced-label { margin-top: 1rem; }
+.reading-column { position: relative; text-align: start; }
+/* Stable additive CJK advances: no pair kerning or automatic punctuation halving. */
+.reading-column p:lang(ja) { font-kerning: none; text-spacing-trim: space-all; }
+.reading-column .cursive-text { font-variant-ligatures: normal; }
+.reading-column p[dir="rtl"] .line-guide { left: 0; right: var(--line-width); }
+.reading-column p[dir="rtl"] .line-guide:before { left: auto; right: -.125rem; }
+.composition-overlay { position: absolute; inset: 0; pointer-events: none; user-select: none; z-index: 2; }
+.diagnostic-mark { display: block; position: absolute; pointer-events: none; }
+.diagnostic-mark.endpoint { background: #87908188; }
+.diagnostic-mark.reference-endpoint { background: #9ca49966; }
+.diagnostic-mark.overflow { background: #d72d2d; }
+.diagnostic-mark.short-ending { background: #c89337; }
+.diagnostic-mark.tracking:after { content: attr(data-label); font: 500 .4375rem/1 var(--sans); position: absolute; top: .1875rem; }
+.diagnostic-mark.shrink { color: #538299; }
+.diagnostic-mark.expand { color: #b57650; }
+.tracking-sliders input:disabled { opacity: .35; }
+.tracking-sliders input:disabled::-webkit-slider-thumb { pointer-events: none; }
+.pretext-note { display: flex; flex-direction: column; gap: .5rem; margin-top: 1rem; padding: 1rem 1.5rem; border: .0625rem solid var(--line); border-radius: .1875rem; color: #90997f; font-size: .625rem; line-height: 1.8; }
+.pretext-note strong { font-weight: 500; color: #5a664d; }
+.benchmark-panel { border: .0625rem solid #d9ddcd; border-radius: .25rem; padding: 1rem 1.125rem; margin-bottom: 1rem; background: #f7f8f1; }
+.benchmark-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.benchmark-heading h3 { font-size: .625rem; font-weight: 500; margin: 0 0 .375rem; color: #768365; }
+#benchmark-total { font: 400 1.8rem/1.2 var(--serif); color: #465137; font-variant-numeric: tabular-nums; }
+#benchmark-mode { display: block; font-size: .5rem; color: #8e9a7e; margin-top: .25rem; }
+#benchmark-run { border: .0625rem solid #cfd6c2; padding: .5rem .75rem; border-radius: .25rem; font-size: .5625rem; }
+#benchmark-run:hover { background: #e9eddf; }
+#benchmark-breakdown { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .75rem 1rem; margin: 1.125rem 0; }
+#benchmark-breakdown div { display: flex; flex-direction: column; gap: .25rem; }
+#benchmark-breakdown dt { font-size: .5rem; color: #8b967b; }
+#benchmark-breakdown dd { font-size: .6875rem; margin: 0; color: #59674a; font-variant-numeric: tabular-nums; }
+.benchmark-panel .control-note { margin: .5rem 0 0; }
+@media (max-width: 47.5rem) {
+  .benchmark-heading { align-items: flex-start; }
+  #benchmark-breakdown { grid-template-columns: 1fr 1fr; }
+  #benchmark-run { font-size: .5rem; max-width: 8rem; }
+  #benchmark-mode { font-size: .5rem; line-height: 1.6; }
+  .benchmark-panel .control-note { font-size: .5625rem; }
+}
