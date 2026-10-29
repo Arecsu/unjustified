@@ -2,6 +2,18 @@
  * A ragged-right adaptation of paragraph-wide shortest-path line breaking.
  * Not a full Knuth–Plass implementation: no glue adjustment or hyphenation.
  * Bounded k-best paths preserve alternatives for the document-level search.
+ *
+ * Performance notes (see research/PERFORMANCE.md). None of this changes the
+ * objective or the retained candidates; `src/optimizer.equivalence.test.ts`
+ * proves the fast paths against the reference implementations in
+ * `bench/reference-compose.ts`.
+ *  - Paths store back-pointers instead of copying line arrays, and candidate
+ *    strings are built incrementally instead of slicing word arrays.
+ *  - A conservative additive width bound skips `measureText` calls for
+ *    candidates that could not survive the existing fill/overflow rules.
+ *  - The document search keeps the pairwise contour/ending term as running
+ *    first and second moments, so adding a paragraph costs O(1) instead of
+ *    comparing it against every earlier paragraph.
  */
 import { trackingAdvances } from './text-metrics';
 import { segmentText, hasArabic } from './language';
@@ -67,19 +79,17 @@ function transition(a: Line | undefined, b: Line, final: boolean): number {
     + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12));
 }
 
-function createLine(words: string[], start: number, end: number, measure: Measure,
-  s: Settings, tracked: boolean, separator: string): Line | null {
-  const text = words.slice(start, end).join(separator).trimEnd();
-  const natural = measure(text);
+/** Build one candidate line from an already-measured natural width. */
+function buildLine(start: number, end: number, text: string, natural: number, advances: number,
+  totalWords: number, s: Settings, tracked: boolean): Line | null {
   // CSS tracking contributes a trailing advance too. Japanese uses grapheme
   // advances; connected Arabic paragraphs have their tracking bounds set to zero.
-  const advances = trackingAdvances(text);
   const coefficient = advances * s.fontSize / s.width;
   const naturalFill = natural / s.width;
-  const final = end === words.length;
+  const final = end === totalWords;
   const only = start === 0 && final;
   let tracking = 0;
-  if (tracked && (s.trackingMin < 0 || s.trackingMax > 0) && !only) {
+  if (tracked && !only && (s.trackingMin < 0 || s.trackingMax > 0)) {
     // Minimize A(f + k·t − target)² + B·t² analytically, then clamp.
     const target = final ? s.minEnding : 1 - s.rag;
     const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
@@ -97,18 +107,36 @@ function createLine(words: string[], start: number, end: number, measure: Measur
   return { start, end, text, natural, width, tracking, fill: width / s.width, overflow };
 }
 
+/** Grapheme advances are immutable per string; the candidate loop asks often. */
+const advanceCache = new Map<string, number>();
+function advancesOf(text: string): number {
+  let count = advanceCache.get(text);
+  if (count === undefined) {
+    count = trackingAdvances(text);
+    if (advanceCache.size > 100000) advanceCache.clear();
+    advanceCache.set(text, count);
+  }
+  return count;
+}
+
 /** Greedy reference for tests / non-DOM clients. The UI reads actual browser wraps. */
 export function greedy(text: string, measure: Measure, s: Settings): Layout {
   const { units: words, separator } = segmentText(text);
+  const total = words.length;
+  if (!total) return { lines: [], cost: 0 };
   const lines: Line[] = [];
-  for (let start = 0; start < words.length;) {
-    let line = createLine(words, start, start + 1, measure, s, false, separator)!;
-    let end = start + 2;
-    while (end <= words.length) {
-      const next = createLine(words, start, end, measure, s, false, separator);
+  const separatorAdvances = separator ? advancesOf(separator) : 0;
+  for (let start = 0; start < total;) {
+    let candidate = words[start];
+    let advances = advancesOf(words[start]);
+    let line = buildLine(start, start + 1, candidate, measure(candidate), advances, total, s, false)!;
+    for (let end = start + 2; end <= total; end++) {
+      const word = words[end - 1];
+      candidate = candidate + separator + word;
+      advances += advancesOf(word) + separatorAdvances;
+      const next = buildLine(start, end, candidate, measure(candidate), advances, total, s, false);
       if (!next) break;
       line = next;
-      end++;
     }
     lines.push(line);
     start = line.end;
@@ -122,17 +150,127 @@ export function scoreParagraph(lines: Line[], s: Settings): number {
     + transition(lines[i - 1], line, i === lines.length - 1), 0);
 }
 
-function prune(paths: Layout[], limit: number): Layout[] {
-  paths.sort((a, b) => a.cost - b.cost);
-  // Preserve some end-length / line-count diversity for cross-paragraph selection.
-  const bins = new Map<string, number>();
-  return paths.filter(path => {
-    const last = path.lines.at(-1)!;
-    const key = `${path.lines.length}:${last.start}`;
-    const count = bins.get(key) ?? 0;
-    bins.set(key, count + 1);
-    return count < 4;
-  }).slice(0, limit);
+/**
+ * Paragraph DP frontier: struct-of-arrays with back-pointers.
+ *
+ * A 40-paragraph post explores ~400,000 partial paths; as objects that was
+ * ~400,000 allocations per composition and the single largest remaining cost.
+ * Indices into typed arrays keep the same algorithm with none of the churn.
+ */
+class PathPool {
+  prev: Int32Array;
+  depth: Int32Array;
+  cost: Float64Array;
+  line: (Line | null)[];
+  size = 0;
+  constructor(capacity: number) {
+    this.prev = new Int32Array(capacity);
+    this.depth = new Int32Array(capacity);
+    this.cost = new Float64Array(capacity);
+    this.line = new Array(capacity).fill(null);
+  }
+  reset() {
+    this.size = 0;
+    this.push(-1, 0, null);
+  }
+  push(prev: number, cost: number, line: Line | null): number {
+    if (this.size === this.prev.length) this.grow();
+    const id = this.size++;
+    this.prev[id] = prev;
+    this.depth[id] = prev < 0 ? 0 : this.depth[prev] + 1;
+    this.cost[id] = cost;
+    this.line[id] = line;
+    return id;
+  }
+  private grow() {
+    const capacity = this.prev.length * 2;
+    const prev = new Int32Array(capacity); prev.set(this.prev);
+    const depth = new Int32Array(capacity); depth.set(this.depth);
+    const cost = new Float64Array(capacity); cost.set(this.cost);
+    const line = this.line.slice(); line.length = capacity;
+    this.prev = prev; this.depth = depth; this.cost = cost; this.line = line;
+  }
+}
+
+function materialize(pool: PathPool, id: number): Layout {
+  const lines: Line[] = new Array(pool.depth[id]);
+  for (let node = id, i = lines.length - 1; node >= 0; node = pool.prev[node], i--) {
+    if (i >= 0) lines[i] = pool.line[node]!;
+  }
+  return { lines, cost: pool.cost[id] };
+}
+
+/** Rank order for pruning: cost, then insertion order (pool ids increase
+ *  monotonically), which reproduces a stable sort by cost exactly. */
+function rank(cost: Float64Array, a: number, b: number): number {
+  const difference = cost[a] - cost[b];
+  return difference !== 0 ? difference : a - b;
+}
+
+/**
+ * Move the `k` cheapest ids to the front, in order. The full sort this replaces
+ * was ~40% of composition time: every word boundary re-sorted a few hundred
+ * candidates with a comparator closure.
+ */
+function selectCheapest(paths: number[], k: number, cost: Float64Array) {
+  const n = paths.length;
+  if (k >= n) {
+    paths.sort((a, b) => rank(cost, a, b));
+    return;
+  }
+  const target = k - 1;
+  let lo = 0, hi = n - 1;
+  while (lo < hi) {
+    // Median-of-three pivot keeps the nearly sorted case linear.
+    const mid = (lo + hi) >> 1;
+    if (rank(cost, paths[mid], paths[lo]) < 0) { const t = paths[mid]; paths[mid] = paths[lo]; paths[lo] = t; }
+    if (rank(cost, paths[hi], paths[lo]) < 0) { const t = paths[hi]; paths[hi] = paths[lo]; paths[lo] = t; }
+    if (rank(cost, paths[hi], paths[mid]) < 0) { const t = paths[hi]; paths[hi] = paths[mid]; paths[mid] = t; }
+    const pivot = paths[mid];
+    let i = lo, j = hi;
+    while (i <= j) {
+      while (rank(cost, paths[i], pivot) < 0) i++;
+      while (rank(cost, paths[j], pivot) > 0) j--;
+      if (i <= j) { const t = paths[i]; paths[i] = paths[j]; paths[j] = t; i++; j--; }
+    }
+    if (target <= j) hi = j;
+    else if (target >= i) lo = i;
+    else break;
+  }
+  const prefix = paths.slice(0, k);
+  prefix.sort((a, b) => rank(cost, a, b));
+  for (let i = 0; i < k; i++) paths[i] = prefix[i];
+}
+
+/** Cost order, then keep a bounded, end-shape-diverse subset. */
+function prune(paths: number[], limit: number, pool: PathPool, bins: Int32Array, stride: number): number[] {
+  if (paths.length === 0) return paths;
+  // Only the cheapest `limit * 4` entries can matter: a bin holds at most four.
+  const prefix = Math.min(paths.length, limit * 4);
+  selectCheapest(paths, prefix, pool.cost);
+  let kept = diversity(paths, prefix, limit, pool, bins, stride);
+  if (kept.length < limit && prefix < paths.length) {
+    // A saturated bin can force the search deeper; sort fully so the kept set is
+    // exactly what a full sort would produce.
+    selectCheapest(paths, paths.length, pool.cost);
+    kept = diversity(paths, paths.length, limit, pool, bins, stride);
+  }
+  return kept;
+}
+
+function diversity(paths: number[], count: number, limit: number, pool: PathPool,
+  bins: Int32Array, stride: number): number[] {
+  bins.fill(-1, 0, bins.length);
+  const kept: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const id = paths[i];
+    const key = pool.depth[id] * stride + pool.line[id]!.start;
+    const seen = bins[key] < 0 ? 0 : bins[key];
+    bins[key] = seen + 1;
+    if (seen < 4) kept.push(id);
+    if (kept.length >= limit) break;
+  }
+  return kept;
 }
 
 export function paragraphCandidates(text: string, measure: Measure, s: Settings,
@@ -141,37 +279,121 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   // its connected glyphs. Latin/Japanese paragraphs retain the chosen bounds.
   if (hasArabic(text)) s = { ...s, trackingMin: 0, trackingMax: 0 };
   const { units: words, separator } = segmentText(text);
-  if (!words.length) return { layouts: [{ lines: [], cost: 0 }], explored: 0 };
-  const paths: Layout[][] = Array.from({ length: words.length + 1 }, () => []);
-  paths[0] = [{ lines: [], cost: 0 }];
+  const total = words.length;
+  if (!total) return { layouts: [{ lines: [], cost: 0 }], explored: 0 };
+  const separatorAdvances = separator ? advancesOf(separator) : 0;
+  const unitAdvances = new Int32Array(total);
+  for (let i = 0; i < total; i++) unitAdvances[i] = advancesOf(words[i]);
+
+  // Conservative additive width bound. Only used to skip measurements that
+  // cannot survive the fill/overflow rules that follow: the band absorbs
+  // kerning, ligatures and contextual (Arabic) shaping differences, so a
+  // skipped candidate would have been discarded anyway.
+  const band = s.width * 0.10;
+  const unitWidths = new Float64Array(total);
+  for (let i = 0; i < total; i++) unitWidths[i] = measure(words[i]);
+  const spaceWidth = separator ? measure(separator) : 0;
+
+  const paths: number[][] = Array.from({ length: total + 1 }, () => []);
+  const pool = new PathPool(1024 + beam * 24);
+  pool.reset();
+  paths[0] = [0];
+  // Flat bin counters, reset per prune without allocating or hashing.
+  const stride = total + 1;
+  const bins = new Int32Array((total + 2) * stride).fill(-1);
   let explored = 0;
-  for (let start = 0; start < words.length; start++) {
-    if (start > 0) paths[start] = prune(paths[start], beam);
-    if (!paths[start].length) continue;
-    for (let end = start + 1; end <= words.length; end++) {
-      const line = createLine(words, start, end, measure, s, true, separator);
+  for (let start = 0; start < total; start++) {
+    if (start > 0) paths[start] = prune(paths[start], beam, pool, bins, stride);
+    const predecessors = paths[start];
+    if (!predecessors.length) continue;
+    let candidate = '';
+    let advances = 0;
+    let estimate = 0;
+    for (let end = start + 1; end <= total; end++) {
+      const index = end - 1;
+      if (end === start + 1) {
+        candidate = words[index];
+        advances = unitAdvances[index];
+        estimate = unitWidths[index];
+      } else {
+        candidate = candidate + separator + words[index];
+        advances += unitAdvances[index] + separatorAdvances;
+        estimate += unitWidths[index] + spaceWidth;
+      }
+      const final = end === total;
+      // Tracking can move a line's width: allow for the full bounded amount.
+      const trackingPx = advances * s.fontSize;
+      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0);
+      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0);
+      if (estimate > longest) {
+        // Beyond the overflow threshold, a longer line can only overflow further.
+        if (end - start > 1) break;
+      } else if (!final && estimate < shortest) {
+        // Cannot reach the 0.50 fill floor that the search requires.
+        continue;
+      }
+      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true);
       if (!line) break;
-      const final = end === words.length;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       const cost = lineCost(line, final, start === 0 && final, s);
-      for (const path of paths[start]) {
-        paths[end].push({
-          lines: [...path.lines, line],
-          cost: path.cost + cost + transition(path.lines.at(-1), line, final),
-        });
+      const bucket = paths[end];
+      for (let i = 0; i < predecessors.length; i++) {
+        const path = predecessors[i];
+        bucket.push(pool.push(path, pool.cost[path] + cost
+          + transition(pool.line[path] ?? undefined, line, final), line));
         explored++;
       }
       // Bound transient memory on long paragraphs.
-      if (paths[end].length > beam * 20) paths[end] = prune(paths[end], beam * 2);
+      if (bucket.length > beam * 20) paths[end] = prune(bucket, beam * 2, pool, bins, stride);
     }
     // Paths before this word will never be used again.
     paths[start] = [];
   }
-  const layouts = prune(paths[words.length], beam);
-  const baseline = greedy(text, measure, s);
+  const retained = prune(paths[total], beam, pool, bins, stride);
+  const layouts = retained.map(id => materialize(pool, id));
   // Retain the exact untracked greedy reference as a valid fallback candidate.
-  layouts.push(baseline);
+  layouts.push(greedy(text, measure, s));
   return { layouts: layouts.sort((a, b) => a.cost - b.cost), explored };
+}
+
+/**
+ * Six-number summary of a layout's visual shape, in the same units and with the
+ * same weights as `shapeDistance`. Body features only compare when both
+ * paragraphs have a body (more than one line).
+ */
+const FEATURE_COUNT = 6;
+const FEATURE_WEIGHTS = [2, 2, 0.25, 0.25, 0.25, 0.25];
+const EMPTY = 0, SINGLE_LINE = 1, HAS_BODY = 2;
+
+function writeFeatures(layout: Layout, out: Float64Array, offset: number): number {
+  const lines = layout.lines;
+  if (!lines.length) {
+    for (let i = 0; i < FEATURE_COUNT; i++) out[offset + i] = 0;
+    return EMPTY;
+  }
+  out[offset] = lines[lines.length - 1].fill;
+  for (let i = 1; i < FEATURE_COUNT; i++) out[offset + i] = 0;
+  if (lines.length < 2) return SINGLE_LINE;
+  const body = lines.length - 1;
+  let sum = 0;
+  for (let i = 0; i < body; i++) sum += lines[i].fill;
+  out[offset + 1] = sum / body;
+  for (let sample = 0; sample < 4; sample++) {
+    out[offset + 2 + sample] = lines[Math.round(sample / 3 * (body - 1))].fill;
+  }
+  return HAS_BODY;
+}
+
+const featureCache = new WeakMap<Layout, Float64Array>();
+
+export function featuresOf(layout: Layout): Float64Array {
+  let features = featureCache.get(layout);
+  if (!features) {
+    features = new Float64Array(FEATURE_COUNT);
+    writeFeatures(layout, features, 0);
+    featureCache.set(layout, features);
+  }
+  return features;
 }
 
 /** Compare normalized body contours (four samples), average fill, and endings.
@@ -179,63 +401,208 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
  */
 export function shapeDistance(a: Layout, b: Layout): number {
   if (!a.lines.length || !b.lines.length) return 0;
-  const bodyA = a.lines.slice(0, -1);
-  const bodyB = b.lines.slice(0, -1);
-  let cost = 2 * square(a.lines.at(-1)!.fill - b.lines.at(-1)!.fill);
-  if (bodyA.length && bodyB.length) {
-    const mean = (lines: Line[]) => lines.reduce((n, l) => n + l.fill, 0) / lines.length;
-    cost += 2 * square(mean(bodyA) - mean(bodyB));
-    for (let sample = 0; sample < 4; sample++) {
-      const x = Math.round(sample / 3 * (bodyA.length - 1));
-      const y = Math.round(sample / 3 * (bodyB.length - 1));
-      cost += square(bodyA[x].fill - bodyB[y].fill) / 4;
-    }
+  const fa = featuresOf(a), fb = featuresOf(b);
+  let cost = FEATURE_WEIGHTS[0] * square(fa[0] - fb[0]);
+  if (a.lines.length > 1 && b.lines.length > 1) {
+    for (let i = 1; i < FEATURE_COUNT; i++) cost += FEATURE_WEIGHTS[i] * square(fa[i] - fb[i]);
   }
   return cost;
 }
 
 export function scoreDocument(paragraphs: Layout[], s: Settings): number {
-  let cost = paragraphs.reduce((sum, p) => sum + p.cost, 0);
+  let cost = 0;
+  for (const p of paragraphs) cost += p.cost;
+  if (s.sync === 0) return cost;
+  const divisor = Math.max(1, paragraphs.length - 1);
   for (let i = 0; i < paragraphs.length; i++) {
     for (let j = 0; j < i; j++) {
-      cost += s.sync * 65 * shapeDistance(paragraphs[i], paragraphs[j])
-        / Math.max(1, paragraphs.length - 1);
+      cost += s.sync * 65 * shapeDistance(paragraphs[i], paragraphs[j]) / divisor;
     }
   }
   return cost;
 }
 
+/**
+ * Fixed-width frontier for the document beam. The moments of the six
+ * shape features are kept per frontier state so the pairwise term is O(1) per
+ * insertion:
+ *   Σ_j w·(v − a_j)² = w·(n·v² − 2·v·Σa_j + Σa_j²)
+ */
+interface DocState {
+  parent: DocState | null;
+  layout: Layout;
+  cost: number;
+  count: number; // non-empty layouts (feature 0 is always compared)
+  bodyCount: number; // layouts with a body (features 1..5)
+  sum0: number;
+  sumSq0: number;
+  sumBody: Float64Array;
+  sumSqBody: Float64Array;
+}
+
+function childState(parent: DocState, layout: Layout, features: Float64Array, offset: number,
+  kind: number, factor: number): DocState {
+  let cost = parent.cost + layout.cost;
+  let { count, bodyCount, sum0, sumSq0 } = parent;
+  let sumBody = parent.sumBody, sumSqBody = parent.sumSqBody;
+  if (kind !== EMPTY) {
+    const v = features[offset];
+    cost += factor * FEATURE_WEIGHTS[0] * (count * v * v - 2 * v * sum0 + sumSq0);
+    count += 1; sum0 += v; sumSq0 += v * v;
+    if (kind === HAS_BODY) {
+      const nextSum = Float64Array.from(sumBody);
+      const nextSq = Float64Array.from(sumSqBody);
+      for (let i = 1; i < FEATURE_COUNT; i++) {
+        const value = features[offset + i];
+        const sum = sumBody[i - 1], sumSq = sumSqBody[i - 1];
+        cost += factor * FEATURE_WEIGHTS[i] * (bodyCount * value * value - 2 * value * sum + sumSq);
+        nextSum[i - 1] = sum + value;
+        nextSq[i - 1] = sumSq + value * value;
+      }
+      sumBody = nextSum; sumSqBody = nextSq; bodyCount += 1;
+    }
+  }
+  return { parent, layout, cost, count, bodyCount, sum0, sumSq0, sumBody, sumSqBody };
+}
+
+/** Pairwise cost of adding `features` to `state`, without allocating. */
+function pairCost(state: DocState, features: Float64Array, offset: number, kind: number, factor: number): number {
+  if (kind === EMPTY) return 0;
+  const v = features[offset];
+  let cost = FEATURE_WEIGHTS[0] * (state.count * v * v - 2 * v * state.sum0 + state.sumSq0);
+  if (kind === HAS_BODY) {
+    for (let i = 1; i < FEATURE_COUNT; i++) {
+      const value = features[offset + i];
+      cost += FEATURE_WEIGHTS[i]
+        * (state.bodyCount * value * value - 2 * value * state.sumBody[i - 1] + state.sumSqBody[i - 1]);
+    }
+  }
+  return factor * cost;
+}
+
+/** Bounded max-heap of (cost, insertion order), keeping the k smallest. Ties
+ * resolve by insertion order so the beam is deterministic and matches a stable
+ * sort of the full frontier. */
+class TopK {
+  private costs: Float64Array;
+  private orders: Float64Array;
+  size = 0;
+  constructor(private limit: number) {
+    const capacity = Math.max(1, limit);
+    this.costs = new Float64Array(capacity);
+    this.orders = new Float64Array(capacity);
+  }
+  /** True when (aCost, aOrder) ranks before (bCost, bOrder). */
+  private static before(aCost: number, aOrder: number, bCost: number, bOrder: number) {
+    return aCost < bCost || (aCost === bCost && aOrder < bOrder);
+  }
+  offer(cost: number, order: number) {
+    const { costs, orders, limit } = this;
+    if (this.size < limit) {
+      let i = this.size++;
+      costs[i] = cost; orders[i] = order;
+      while (i > 0) {
+        // Max-heap: the worst kept entry stays at the root, so bubble up while
+        // this new entry is worse than its parent.
+        const parent = (i - 1) >> 1;
+        if (TopK.before(cost, order, costs[parent], orders[parent])) break;
+        costs[i] = costs[parent]; orders[i] = orders[parent];
+        costs[parent] = cost; orders[parent] = order;
+        i = parent;
+      }
+      return;
+    }
+    // Full: the root is the worst kept entry.
+    if (!TopK.before(cost, order, costs[0], orders[0])) return;
+    costs[0] = cost; orders[0] = order;
+    let i = 0;
+    for (;;) {
+      // The root must stay the worst kept entry, so sift the worst child up.
+      const left = i * 2 + 1, right = left + 1;
+      let worst = i;
+      if (left < this.size && TopK.before(costs[worst], orders[worst], costs[left], orders[left])) worst = left;
+      if (right < this.size && TopK.before(costs[worst], orders[worst], costs[right], orders[right])) worst = right;
+      if (worst === i) break;
+      const c = costs[i], o = orders[i];
+      costs[i] = costs[worst]; orders[i] = orders[worst];
+      costs[worst] = c; orders[worst] = o;
+      i = worst;
+    }
+  }
+  sorted(): { cost: number; order: number }[] {
+    const out = Array.from({ length: this.size }, (_, i) => ({ cost: this.costs[i], order: this.orders[i] }));
+    out.sort((a, b) => a.cost - b.cost || a.order - b.order);
+    return out;
+  }
+}
+
 export function compose(texts: string[], measure: Measure, s: Settings): Composition {
   const options = texts.map(text => paragraphCandidates(text, measure, s));
   let explored = options.reduce((sum, option) => sum + option.explored, 0);
+  let candidates = 0;
+  for (const option of options) candidates += option.layouts.length;
   if (s.sync === 0) {
     // With no pairwise terms this objective is separable; skip joint enumeration.
     const paragraphs = options.map(option => option.layouts[0]);
-    return { paragraphs, cost: paragraphs.reduce((sum, p) => sum + p.cost, 0), explored,
-      candidates: options.reduce((sum, p) => sum + p.layouts.length, 0) };
+    return { paragraphs, cost: paragraphs.reduce((sum, p) => sum + p.cost, 0), explored, candidates };
   }
-  // Exhaustive joint selection over retained candidates for the three-paragraph
-  // experiment. For >3 paragraphs, use a bounded document beam to stay interactive.
-  let frontier: { paragraphs: Layout[]; cost: number }[] = [{ paragraphs: [], cost: 0 }];
+
+  // One feature table for every candidate layout: no per-comparison work.
+  const offsets = new Int32Array(options.length);
+  let total = 0;
+  for (let i = 0; i < options.length; i++) { offsets[i] = total; total += options[i].layouts.length; }
+  const features = new Float64Array(total * FEATURE_COUNT);
+  const kinds = new Uint8Array(total);
   for (let i = 0; i < options.length; i++) {
-    const next: typeof frontier = [];
-    for (const previous of frontier) {
-      for (const layout of options[i].layouts) {
-        let cost = previous.cost + layout.cost;
-        for (const other of previous.paragraphs) {
-          cost += s.sync * 65 * shapeDistance(layout, other) / Math.max(1, texts.length - 1);
-        }
-        next.push({ paragraphs: [...previous.paragraphs, layout], cost });
-        explored++;
+    const layouts = options[i].layouts;
+    for (let k = 0; k < layouts.length; k++) {
+      kinds[offsets[i] + k] = writeFeatures(layouts[k], features, (offsets[i] + k) * FEATURE_COUNT);
+    }
+  }
+
+  const factor = s.sync * 65 / Math.max(1, texts.length - 1);
+  const zero = new Float64Array(FEATURE_COUNT - 1);
+  let frontier: DocState[] = [{
+    parent: null, layout: { lines: [], cost: 0 }, cost: 0,
+    count: 0, bodyCount: 0, sum0: 0, sumSq0: 0, sumBody: zero, sumSqBody: zero,
+  }];
+  for (let i = 0; i < options.length; i++) {
+    const layouts = options[i].layouts;
+    const offset = offsets[i];
+    const limit = texts.length <= 3 && i < texts.length - 1 ? 1200 : 128;
+    const top = new TopK(limit);
+    let order = 0;
+    for (let f = 0; f < frontier.length; f++) {
+      const state = frontier[f];
+      for (let k = 0; k < layouts.length; k++) {
+        const index = offset + k;
+        const cost = state.cost + layouts[k].cost
+          + pairCost(state, features, index * FEATURE_COUNT, kinds[index], factor);
+        top.offer(cost, order++);
       }
     }
-    next.sort((a, b) => a.cost - b.cost);
-    const limit = texts.length <= 3 && i < texts.length - 1 ? 1200 : 128;
-    frontier = next.slice(0, limit);
+    explored += order;
+    const retained = top.sorted();
+    const next: DocState[] = new Array(retained.length);
+    for (let n = 0; n < retained.length; n++) {
+      const insertion = retained[n].order;
+      const f = (insertion / layouts.length) | 0;
+      const k = insertion - f * layouts.length;
+      const index = offset + k;
+      next[n] = childState(frontier[f], layouts[k], features, index * FEATURE_COUNT, kinds[index], factor);
+    }
+    frontier = next;
   }
-  const best = frontier[0] ?? { paragraphs: [], cost: 0 };
-  return { ...best, explored, candidates: options.reduce((sum, p) => sum + p.layouts.length, 0) };
+
+  const paragraphs: Layout[] = [];
+  // The chain root is a virtual empty state, not a paragraph.
+  for (let state: DocState | null = frontier[0] ?? null; state?.parent; state = state.parent) paragraphs.push(state.layout);
+  paragraphs.reverse();
+  return { paragraphs, cost: scoreDocument(paragraphs, s), explored, candidates };
 }
+
+/** Internal hooks used by the equivalence tests. Not part of the public API. */
+export const internals = { childState, pairCost, TopK, selectCheapest, rank, FEATURE_COUNT, FEATURE_WEIGHTS, writeFeatures };
 
 export function metrics(layouts: Layout[], s: Settings) {
   const body = layouts.flatMap(p => p.lines.length > 1 ? p.lines.slice(0, -1) : []);
