@@ -1,0 +1,40 @@
+/**
+ * Canvas measurement, shared by the worker and the main-thread fallback so both
+ * produce identical widths for the same text.
+ */
+import { createCanvasMeasure } from './text-metrics';
+import { families } from './fonts';
+import type { Typeface } from './fonts';
+import { hasArabic, hasJapanese, directionFor } from './language';
+import type { DirectionPolicy } from './language';
+import type { Settings } from './optimizer';
+
+export type Measure = (text: string) => number;
+
+/**
+ * One Canvas context per shaping context (cursive / direction / Japanese).
+ * Widths are cached by candidate string inside each context, which is what makes
+ * a recomposition after a resize free of new measurements.
+ */
+export function createMeasure(settings: Settings, typeface: Typeface, direction: DirectionPolicy) {
+  const contexts = new Map<string, ReturnType<typeof createCanvasMeasure>>();
+  const measure: Measure = text => {
+    const cursive = hasArabic(text);
+    const resolved = directionFor(text, direction);
+    const japanese = hasJapanese(text);
+    const key = `${cursive}:${resolved}:${japanese}`;
+    let measurement = contexts.get(key);
+    if (!measurement) {
+      measurement = createCanvasMeasure(new OffscreenCanvas(1, 1).getContext('2d')!,
+        `400 ${settings.fontSize}px ${families[typeface]}`, cursive, resolved, japanese);
+      contexts.set(key, measurement);
+    }
+    return measurement.measure(text);
+  };
+  return {
+    measure,
+    get calls() { let n = 0; for (const m of contexts.values()) n += m.calls; return n; },
+    get duration() { let n = 0; for (const m of contexts.values()) n += m.duration; return n; },
+    trim() { for (const m of contexts.values()) if (m.size > 30000) m.clear(); },
+  };
+}

@@ -6,7 +6,7 @@ export interface RunTiming {
   searchMs: number;
   renderMs: number;
   otherMs: number;
-  debounceMs: number;
+  queueMs: number;
   mode: 'cold' | 'warm';
   measurements: number;
 }
@@ -19,7 +19,7 @@ export function publishTiming(timing: RunTiming) {
     ['Canvas measurement', timing.measureMs], ['TypeScript search', timing.searchMs],
     ['DOM + frame wait', timing.renderMs], ['Startup / transport / other', timing.otherMs],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ms(Number(value))}</dd></div>`).join('');
-  document.querySelector('#benchmark-debounce')!.textContent = `Debounce / queue: ${ms(timing.debounceMs)} separately; interaction-to-frame: ${ms(timing.totalMs + timing.debounceMs)}. ${timing.measurements.toLocaleString()} new Canvas measurements.`;
+  document.querySelector('#benchmark-queue')!.textContent = `Pending-input wait (no debounce): ${ms(timing.queueMs)} separately; interaction-to-frame: ${ms(timing.totalMs + timing.queueMs)}. ${timing.measurements.toLocaleString()} new Canvas measurements.`;
 }
 export async function benchmark(recompose: (cold: boolean) => Promise<RunTiming | undefined>) {
   const button = document.querySelector<HTMLButtonElement>('#benchmark-run')!;

@@ -1,16 +1,29 @@
 import type { Composition, Settings } from './optimizer';
 import type { DirectionPolicy } from './language';
+import type { FontBinary } from './fonts';
 export { families } from './fonts';
 export type { Typeface } from './fonts';
 import type { Typeface } from './fonts';
+/** Pre-fetch and prepare the worker's font subsets while the page is painting. */
+export interface WarmRequest {
+  warm: true;
+  typeface: Typeface;
+  text: string;
+  fonts?: FontBinary[];
+}
+
 export interface ComposeRequest {
   id: number;
   paragraphs: string[];
   settings: Settings;
   typeface: Typeface;
   direction: DirectionPolicy;
+  fonts?: FontBinary[];
 }
-export type WorkerResponse = ComposeResponse | { kind: 'ready' };
+export type WorkerResponse =
+  | ComposeResponse
+  | { kind: 'ready' | 'booted' | 'warm-start' | 'warm-fonts' | 'warm-jit' }
+  | { kind: 'warm-error'; detail: string };
 export interface ComposeResponse {
   id: number;
   result?: Composition;

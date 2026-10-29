@@ -25,6 +25,9 @@ const css = { serif: serifCss, sans: sansCss, roboto: robotoCss, japanese: japan
 interface Face { family: string; url: string; weight: string; range: string; intervals: number[][] }
 const definitions = new Map<string, Face[]>();
 const pending = new Map<string, Promise<void>>();
+/** Fetched font binaries, so the worker can build its faces without fetching
+ *  the same subsets again (a duplicate download and parse on every cold start). */
+const binaries = new Map<string, ArrayBuffer>();
 function facesFor(key: keyof typeof css): Face[] {
   if (definitions.has(key)) return definitions.get(key)!;
   const faces = [...css[key].matchAll(/@font-face\s*\{([^}]+)\}/g)].map(([, body]) => {
@@ -59,7 +62,9 @@ export async function loadFonts(typeface: Typeface, text: string, set: FontFaceS
       job = (async () => {
         const response = await fetch(new URL(face.url, import.meta.url));
         if (!response.ok) throw new Error(`Font download failed (${response.status})`);
-        const font = new FontFace(face.family, await response.arrayBuffer(), { weight: face.weight, unicodeRange: face.range });
+        const data = await response.arrayBuffer();
+        binaries.set(id, data);
+        const font = new FontFace(face.family, data, { weight: face.weight, unicodeRange: face.range });
         // Add before loading to avoid stale fallback-font measurements in WebKit.
         set.add(font);
         await font.load();
@@ -69,4 +74,20 @@ export async function loadFonts(typeface: Typeface, text: string, set: FontFaceS
     jobs.push(job);
   }
   await Promise.all(jobs);
+}
+
+export interface FontBinary { family: string; weight: string; range: string; data: ArrayBuffer }
+
+/** Every subset this page has already fetched, as plain data for another
+ *  thread. Callers must `await loadFonts(...)` for the current text first, which
+ *  guarantees the set is complete for that text. Copied, not transferred: the
+ *  page's FontFace objects still reference these buffers. */
+export function fontBinaries(): FontBinary[] {
+  const result: FontBinary[] = [];
+  for (const [id, data] of binaries) {
+    const [key, ...rest] = id.split(':');
+    const face = facesFor(key as keyof typeof css).find(candidate => candidate.url === rest.join(':'));
+    if (face && data) result.push({ family: face.family, weight: face.weight, range: face.range, data });
+  }
+  return result;
 }

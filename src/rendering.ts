@@ -1,72 +1,139 @@
 import type { Layout } from './optimizer';
 import { detectLanguage, directionFor, segmentText, hasArabic } from './language';
 import type { DirectionPolicy } from './language';
-export const cssRem = (pixels: number) => `${pixels / parseFloat(getComputedStyle(document.documentElement).fontSize)}rem`;
+
+/**
+ * Root font size is read once per render instead of once per line: calling
+ * `getComputedStyle` inside a per-line loop forces style recalculation for every
+ * line and dominates DOM commit time on long documents.
+ */
+export function remScale(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+}
+export const cssRem = (pixels: number, root = remScale()) => `${pixels / root}rem`;
+
+const escapeHtml = (text: string) => text.replace(/[&<>"']/g, c => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!
+));
+
 export function annotateParagraph(p: HTMLElement, text: string, direction: DirectionPolicy) {
   p.lang = detectLanguage(text);
   p.dir = directionFor(text, direction);
   p.classList.toggle('cursive-text', hasArabic(text));
 }
-export function renderOptimized(target: HTMLElement, layouts: Layout[], source: string[], baseline: Layout[],
-  direction: DirectionPolicy, inspection: boolean, inspect: (p: number, l: number) => void) {
-  const fragment = document.createDocumentFragment();
+
+export interface RenderOptions {
+  direction: DirectionPolicy;
+  inspection?: boolean;
+  /** Per-word spans + `moved-word` classes. Off unless highlighting is on. */
+  highlightMoves?: boolean;
+  /** Reserved height per paragraph, in CSS pixels, from the native layout. */
+  reservePixels?: (number | undefined)[];
+  /** Reserved column height, in CSS pixels, so the card cannot change size. */
+  reserveHeight?: number;
+  onInspect?: (paragraph: number, line: number) => void;
+}
+
+/**
+ * Render the composed lines as real, selectable text. One inline-block per line
+ * forces the chosen breaks; the words inside a line stay plain text unless
+ * "highlight moved words" asks for per-word spans.
+ *
+ * The whole column is written with one `innerHTML` assignment: for a 40-paragraph
+ * post that is one parse instead of ~4,000 `createElement` calls, and a single
+ * delegated listener set replaces three listeners per line.
+ */
+export function renderOptimized(target: HTMLElement, layouts: Layout[], source: string[],
+  baseline: Layout[], options: RenderOptions) {
+  const { direction, inspection = false, highlightMoves = false } = options;
+  const root = remScale();
+  const highlight = highlightMoves;
+  const paragraphs: string[] = [];
   layouts.forEach((layout, pIndex) => {
-    const p = document.createElement('p');
-    p.className = 'composed-paragraph';
-    annotateParagraph(p, source[pIndex], direction);
-    const { units, separator } = segmentText(source[pIndex]);
+    const text = source[pIndex] ?? '';
+    const { units, separator } = segmentText(text);
+    const lang = detectLanguage(text);
+    const dir = directionFor(text, direction);
+    // One pass over the baseline instead of a linear scan per word.
+    const unitLine = highlight ? new Int32Array(units.length).fill(-1) : undefined;
+    if (unitLine) {
+      baseline[pIndex]?.lines.forEach((line, lineIndex) => {
+        for (let i = line.start; i < line.end && i < unitLine.length; i++) unitLine[i] = lineIndex;
+      });
+    }
+    const lines: string[] = [];
     layout.lines.forEach((line, lineIndex) => {
-      const element = document.createElement('span');
-      element.className = `composed-line${line.overflow ? ' overflowing' : ''}`;
-      element.style.letterSpacing = `${line.tracking}em`;
-      element.style.setProperty('--line-width', cssRem(line.width));
-      element.dataset.paragraph = String(pIndex);
-      element.dataset.line = String(lineIndex);
-      element.tabIndex = inspection ? 0 : -1;
-      const text = document.createElement('span');
-      text.className = 'line-text';
+      let inner = '';
       for (let i = line.start; i < line.end; i++) {
-        if (i > line.start) text.append(separator);
-        const original = baseline[pIndex]?.lines.findIndex(l => i >= l.start && i < l.end);
-        const span = document.createElement('span');
-        span.textContent = i === line.end - 1 ? units[i].trimEnd() : units[i];
-        if (original !== lineIndex) span.className = 'moved-word';
-        text.append(span);
+        const unit = i === line.end - 1 ? units[i].trimEnd() : units[i];
+        if (i > line.start) inner += escapeHtml(separator);
+        if (highlight) {
+          const moved = unitLine![i] !== lineIndex ? ' class="moved-word"' : '';
+          inner += `<span${moved}>${escapeHtml(unit)}</span>`;
+        } else {
+          inner += escapeHtml(unit);
+        }
       }
-      element.append(text);
       // Native copy: preserve source separators inside inline boxes, not block
       // wrappers or fake linebreaks. Japanese boundaries usually have no space.
-      if (lineIndex < layout.lines.length - 1) {
-        element.append(separator || (/\s$/u.test(units[line.end - 1]) ? ' ' : ''));
-      }
-      const guide = document.createElement('span');
-      guide.className = 'line-guide'; guide.setAttribute('aria-hidden', 'true');
-      element.append(guide);
-      const show = () => inspect(pIndex, lineIndex);
-      element.addEventListener('pointerenter', show);
-      element.addEventListener('focus', show);
-      element.addEventListener('click', () => {
-        const input = document.querySelector<HTMLInputElement>('#inspect')!;
-        if (!input.checked) input.click();
-        show();
-      });
-      p.append(element);
+      // The separator sits outside `.line-text`, which measures ink only.
+      const trailing = lineIndex < layout.lines.length - 1
+        ? escapeHtml(separator || (/\s$/u.test(units[line.end - 1] ?? '') ? ' ' : ''))
+        : '';
+      const guide = '<span class="line-guide" aria-hidden="true"></span>';
+      lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
+        + ` style="letter-spacing:${line.tracking}em;--line-width:${cssRem(line.width, root)}"`
+        + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
+        + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
+        + `<span class="line-text">${inner}</span>${trailing}${guide}</span>`);
     });
-    fragment.append(p);
+    const reserve = options.reservePixels?.[pIndex];
+    const style = reserve ? ` style="min-height:${reserve.toFixed(2)}px"` : '';
+    paragraphs.push(`<p class="composed-paragraph" lang="${lang}" dir="${dir}"${style}>${lines.join('')}</p>`);
   });
-  target.replaceChildren(fragment);
+  target.innerHTML = paragraphs.join('');
+  if (options.reserveHeight) target.style.minHeight = `${options.reserveHeight.toFixed(2)}px`;
+  else target.style.removeProperty('min-height');
 }
+
 export function renderBaselineGuides(target: HTMLElement, layouts: Layout[], size: number) {
+  const root = remScale();
   target.querySelectorAll('.baseline-guides').forEach(el => el.remove());
   target.querySelectorAll('p').forEach((p, pIndex) => {
+    const lines = layouts[pIndex]?.lines ?? [];
+    const marks = lines.map((line, index) => '<span class="line-guide" aria-hidden="true"'
+      + ` style="--line-width:${cssRem(line.width, root)};top:${cssRem(index * size * 1.55, root)}"></span>`).join('');
     const guides = document.createElement('span');
-    guides.className = 'baseline-guides'; guides.setAttribute('aria-hidden', 'true');
-    layouts[pIndex].lines.forEach((line, index) => {
-      const guide = document.createElement('span'); guide.className = 'line-guide';
-      guide.style.setProperty('--line-width', cssRem(line.width));
-      guide.style.top = cssRem(index * size * 1.55);
-      guides.append(guide);
-    });
+    guides.className = 'baseline-guides';
+    guides.setAttribute('aria-hidden', 'true');
+    guides.innerHTML = marks;
     p.append(guides);
+  });
+}
+
+/**
+ * Delegated inspection events, installed once per column. `pointerover` and
+ * `focusin` bubble; per-line listeners did not.
+ */
+export function bindInspection(target: HTMLElement, onInspect: (paragraph: number, line: number) => void) {
+  const marker = '__unjustifiedInspection';
+  const host = target as HTMLElement & { [key: string]: unknown };
+  if (host[marker]) return;
+  host[marker] = true;
+  const find = (event: Event) => {
+    const element = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('.composed-line');
+    if (!element || !target.contains(element)) return;
+    const paragraph = Number(element.dataset.paragraph);
+    if (Number.isNaN(paragraph)) return;
+    onInspect(paragraph, Number(element.dataset.line));
+  };
+  target.addEventListener('pointerover', find);
+  target.addEventListener('focusin', find);
+  target.addEventListener('click', event => {
+    const element = (event.target as HTMLElement | null)?.closest?.<HTMLElement>('.composed-line');
+    if (!element || !target.contains(element)) return;
+    const input = document.querySelector<HTMLInputElement>('#inspect');
+    if (input && !input.checked) input.click();
+    find(event);
   });
 }
