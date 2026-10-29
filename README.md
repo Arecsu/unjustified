@@ -12,31 +12,41 @@ pnpm dev --port 5199
 Open <http://localhost:5199>, or the printed LAN URL on a phone.
 
 ```sh
-pnpm test          # pure optimizer / language tests
-pnpm test:e2e      # Chrome browser tests, including native clipboard
+pnpm test           # pure search/language tests, reference equivalence, scaling guard
+pnpm test:e2e       # Chrome browser tests, including native clipboard and the 35-paragraph stress suite
 pnpm test:production # build and run the same browser suite against production
-pnpm build        # typecheck + production bundle
-pnpm preview      # local production preview
+pnpm build          # typecheck + production bundle
+pnpm preview        # local production preview
+pnpm bench          # performance harness (needs a running dev server)
+pnpm bench:search   # pure search benchmark, Node only
 ```
 
 Browser tests use installed Google Chrome. To use bundled Chromium instead, run `pnpm exec playwright install chromium` and remove `channel: 'chrome'` in `playwright.config.ts`.
 
 ## Playground
 
-- English, Japanese, and Arabic examples; edit 1–8 paragraphs, up to 6,000 UTF-16 code units.
+- English, Japanese, and Arabic examples; edit 1–60 paragraphs, up to 30,000 UTF-16 code units (a full article).
 - **Auto by language / Left-to-right / Right-to-left** direction. Auto resolves each paragraph from its first strong letter; alignment follows direction.
 - Typeface choices are filtered by detected language. English has Source Serif 4, DM Sans, Georgia, Roboto Flex and the Latin-capable Noto faces. Japanese uses Noto Sans JP; Arabic uses Noto Sans Arabic. Only font subsets needed by the text are fetched, consistently on the page and in the worker.
 - Two independent tracking handles, default −0.012em / +0.012em. Zero disables either direction. Arabic paragraphs always use zero tracking to preserve connected shaping.
 - **Compare** shows native browser wrapping and optimized text at identical actual measures. **Focus** shows optimized text alone.
 - **Composition diagnostics** overlays neutral line endpoints, faint comparison endpoints at the same ordinal line, signed tracking (orange expansion / blue shrink), amber short endings, and red overflow. Normal whitespace and intentional raggedness are not painted as errors. This replaces the old standalone Difference chart.
-- Optional margin guides, moved-unit highlighting, and keyboard-accessible line inspection.
+- Optional margin guides, moved-unit highlighting, and keyboard-accessible line inspection. Per-word spans are only built when highlighting is on.
 - Export a static HTML snapshot with system-font fallback; it is not a production responsive typesetter.
 
-### Selection and copying
+## Rendering
+
+The composed column is written with one `innerHTML` assignment and one delegated
+listener set. The previous composition stays on screen while a resize is being
+recomposed; stale line boxes are clipped for that brief window instead of flashing
+back to native text. Reservable paragraph/column heights (off by default) can make
+the swap shift-free for pages that paint before composing.
+
+## Selection and copying
 
 The text is real DOM text, not a canvas image or an invisible duplicate. Full-width **inline** line boxes force the chosen visual breaks without making every line a semantic block. Logical separators stay inside the line boxes; real paragraphs remain `<p>` elements. Copying therefore preserves sentences and paragraph boundaries **natively**, with no copy listener or clipboard rewriting.
 
-Chrome tests exercise actual system-clipboard copy for all three languages, full and partial selections, and with diagnostics enabled. This is not a full screen-reader audit. Mixed-direction text and browser-specific copy behavior still need broader assistive-technology and cross-browser testing.
+Chrome tests exercise actual system-clipboard copy for all three languages, full and partial selections, a 35-paragraph article, and with diagnostics enabled. This is not a full screen-reader audit. Mixed-direction text and browser-specific copy behavior still need broader assistive-technology and cross-browser testing.
 
 ## Joint selection, not independent paragraphs
 
@@ -44,13 +54,45 @@ Each paragraph first gets up to 32 retained candidate paths plus a greedy fallba
 
 This is deterministic, beam-pruned optimization, not an exhaustive search of every possible break arrangement or a universal definition of beautiful typography. The precise model and papers are documented in [research/README.md](research/README.md).
 
-## Benchmark
+## Performance
 
-**The whole trip** measures composition start through a next paint opportunity: font readiness on both threads, native A geometry, Canvas measurement, TypeScript search, DOM updates and frame wait. The 100ms control debounce is reported separately. This is not GPU paint telemetry.
+Composition is a two-stage search: each paragraph runs a bounded k-best line-break
+DP, then the document search selects the combination. The document stage keeps
+running moments of each layout's shape features, so the pairwise contour/ending
+term costs O(1) per candidate instead of one comparison per earlier paragraph;
+this turned 933 ms into 35 ms for a 40-paragraph article without changing the
+objective. `src/optimizer.equivalence.test.ts` proves that against the reference
+implementation in `bench/reference-compose.ts` (600 document × font × settings
+combinations, including explored-path counts).
 
-**Benchmark cold + cached** runs one fresh-worker / empty-layout-cache composition followed by five cached runs. Fonts may be HTTP-cached: it is explicitly not a cold-network test. Timings, scope, current observations and optimization priorities live in [research/PERFORMANCE.md](research/PERFORMANCE.md).
+Measured with the 40-paragraph, 12,902-character harness document at a 390 px
+measure (`pnpm bench`):
 
-`window.__composition` exposes the last layout and timing; `window.__benchmark` contains cold/cached benchmark records. No WASM is used.
+| | before | after |
+| --- | ---: | ---: |
+| Worker cold composition | 473 ms | 120 ms |
+| Worker warm recomposition (resize) | 316 ms | 36 ms |
+| Native geometry read | 12.5 ms | 4.1 ms |
+| DOM commit + forced layout | 18.5 ms | 3.8 ms |
+| DOM nodes in the composed column | 3,478 | 1,027 |
+
+The whole trip (font readiness on both threads, native geometry, Canvas
+measurement, search, DOM updates and two animation frames) is still reported in
+the UI. Input dispatches immediately, with at most one in-flight solve and one latest pending input; pending-input wait is reported separately. Method,
+per-stage breakdown, integration guidance, the layout-shift measurements and the
+measured reason there is no WASM path are in
+[research/PERFORMANCE.md](research/PERFORMANCE.md).
+
+## Battle tests
+
+`tests/stress.spec.ts` loads a generated 35-paragraph article (~11,000
+characters) through the editor and checks the things a real deployment hits:
+no horizontal overflow, every word and paragraph boundary preserved, tracking
+bounds, Canvas↔DOM width agreement, DOM budget, warm recomposition with zero new
+measurements, a resize burst with no long task, opt-in word highlighting that
+does not change the text, determinism, diagnostics that do not move geometry,
+native clipboard copy of the whole article, and 20-paragraph Japanese and Arabic
+documents at two widths. `src/optimizer.perf.test.ts` guards search scaling.
 
 ## Modules
 
@@ -62,10 +104,11 @@ This is deterministic, beam-pruned optimization, not an exhaustive search of eve
 | `src/language.ts` | Detection, direction, normalization and Japanese break opportunities |
 | `src/fonts.ts` | Typeface coverage and shared subset loading |
 | `src/text-metrics.ts` | Canvas cache, grapheme advances and shaping setup |
-| `src/native-layout.ts` | Native browser line geometry, including RTL |
-| `src/rendering.ts` | Selectable, copy-preserving line boxes and guides |
+| `src/native-layout.ts` | Native browser line geometry (one Range per word, RTL-safe) |
+| `src/rendering.ts` | Selectable, copy-preserving line boxes, guide marks, delegated inspection |
 | `src/visualizers.ts` | Optional composition diagnostics |
 | `src/benchmark.ts` | End-to-end timing UI and repeated runs |
+| `bench/` | Performance harness: corpus, DOM stages, article fixture, reference search |
 | `src/composer.worker.ts`, `src/protocol.ts` | Worker search and message contracts |
 | `src/styles/*.css` | Relative-unit, responsive presentation |
 
