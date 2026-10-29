@@ -27,15 +27,17 @@
           <div class="control-section"><h2><span>02</span> The composition</h2>
             <fieldset class="tracking-control"><legend>Tracking range</legend>
               <div class="tracking-values"><output id="tracking-min-value" for="tracking-min">−0.012 em</output><output id="tracking-max-value" for="tracking-max">+0.012 em</output></div>
-              <div class="tracking-sliders" style="--tracking-start:35%;--tracking-end:65%">
-                <input type="range" id="tracking-min" min="-0.04" max="0" step="0.001" value="-0.012" aria-label="Minimum tracking (shrink)" />
-                <input type="range" id="tracking-max" min="0" max="0.04" step="0.001" value="0.012" aria-label="Maximum tracking (expand)" />
+              <div class="tracking-sliders" style="--tracking-start:42.5%;--tracking-end:57.5%">
+                <input type="range" id="tracking-min" min="-0.08" max="0" step="0.001" value="-0.012" aria-label="Minimum tracking (shrink)" />
+                <input type="range" id="tracking-max" min="0" max="0.08" step="0.001" value="0.012" aria-label="Maximum tracking (expand)" />
                 <span class="tracking-zero" aria-hidden="true"></span>
               </div>
               <div class="range-ends"><span>Shrink</span><span>0</span><span>Expand</span></div>
               <p id="tracking-note" class="control-note">Two independent limits, not a forced adjustment.</p>
             </fieldset>
             {{range:rag}}
+            {{range:firmness}}
+            <p id="firmness-note" class="control-note">How freely tracking is spent to pull lines onto the rag. Pair with less room for the rag and wider tracking for a nearly flush edge.</p>
             {{range:sync}}
             <p id="harmony-note" class="control-note">Joint selection across all paragraphs. Set to zero for independent layouts.</p>
             <label class="toggle-row" for="protect"><span>Protect short endings</span><input type="checkbox" id="protect" checked /><span class="switch" aria-hidden="true"></span></label>

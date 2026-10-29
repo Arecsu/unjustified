@@ -265,3 +265,25 @@ test('the two tracking handles allow independent negative and positive bounds', 
   await expect(page.locator('#tracking-min')).toHaveValue('-0.012');
   await expect(page.locator('#tracking-max')).toHaveValue('0.012');
 });
+
+test('full edge firmness pulls body lines nearly flush without overflowing', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  const bodyFills = () => page.evaluate(() => (window as any).__composition.result.paragraphs
+    .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
+  await setRange(page, 'rag', 0);
+  await setRange(page, 'tracking-min', -0.08);
+  await setRange(page, 'tracking-max', 0.08);
+  const ragged = Math.min(...await bodyFills());
+  await setRange(page, 'firmness', 100);
+  await expect(page.locator('#firmness-value')).toHaveText('100%');
+  const fills = await bodyFills();
+  expect(Math.min(...fills)).toBeGreaterThan(Math.max(ragged, 0.97));
+  // Rendered text must not cross the column edge, not merely the model's.
+  const spill = await page.evaluate(() => {
+    const column = document.querySelector('#optimized')!.getBoundingClientRect();
+    return Math.max(...[...document.querySelectorAll('#optimized .line-text')]
+      .map(el => el.getBoundingClientRect().right - column.right));
+  });
+  expect(spill).toBeLessThan(0.5);
+});

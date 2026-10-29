@@ -28,7 +28,8 @@ Browser tests use installed Google Chrome. To use bundled Chromium instead, run 
 - English, Japanese, and Arabic examples; edit 1–60 paragraphs, up to 30,000 UTF-16 code units (a full article).
 - **Auto by language / Left-to-right / Right-to-left** direction. Auto resolves each paragraph from its first strong letter; alignment follows direction.
 - Typeface choices are filtered by detected language. English has Source Serif 4, DM Sans, Georgia, Roboto Flex and the Latin-capable Noto faces. Japanese uses Noto Sans JP; Arabic uses Noto Sans Arabic. Only font subsets needed by the text are fetched, consistently on the page and in the worker.
-- Two independent tracking handles, default −0.012em / +0.012em. Zero disables either direction. Arabic paragraphs always use zero tracking to preserve connected shaping.
+- Two independent tracking handles, default −0.012em / +0.012em, up to ±0.08em. Zero disables either direction.
+- **Edge firmness** (default 0) sets how freely tracking is spent to reach the rag target. With no room for the rag, wide tracking and full firmness, body lines land essentially flush: a nearly justified edge from letter-spacing alone, with the visible cost of heavily tracked lines. Arabic paragraphs always use zero tracking to preserve connected shaping.
 - **Compare** shows native browser wrapping and optimized text at identical actual measures. **Focus** shows optimized text alone.
 - **Composition diagnostics** overlays neutral line endpoints, faint comparison endpoints at the same ordinal line, signed tracking (orange expansion / blue shrink), amber short endings, and red overflow. Normal whitespace and intentional raggedness are not painted as errors. This replaces the old standalone Difference chart.
 - Optional margin guides, moved-unit highlighting, and keyboard-accessible line inspection. Per-word spans are only built when highlighting is on.

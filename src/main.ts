@@ -32,7 +32,7 @@ const MAX_CHARACTERS = 30000;
  */
 const RESERVE_NATIVE_HEIGHT = false;
 
-const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, protectEndings: true } satisfies Settings;
+const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, protectEndings: true } satisfies Settings;
 let settings: Settings = { ...defaults };
 let paragraphs = samples.editorial.split('\n\n');
 let typeface: Typeface = 'serif';
@@ -383,14 +383,14 @@ function inspect(p: number, l: number) {
 const controls: Record<string, { key: keyof Settings; factor: number; unit: string }> = {
   'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, measure: { key: 'width', factor: 1, unit: ' px' },
   'tracking-min': { key: 'trackingMin', factor: 1, unit: ' em' }, 'tracking-max': { key: 'trackingMax', factor: 1, unit: ' em' },
-  rag: { key: 'rag', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
+  rag: { key: 'rag', factor: .01, unit: '%' }, firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
 };
 function formatControl(id: string, value: number, unit: string) {
   return id.startsWith('tracking-') ? `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(3)}${unit}` : `${value}${unit}`;
 }
 function updateTrackingRange() {
-  $('.tracking-sliders').style.setProperty('--tracking-start', `${(settings.trackingMin + .04) / .08 * 100}%`);
-  $('.tracking-sliders').style.setProperty('--tracking-end', `${(settings.trackingMax + .04) / .08 * 100}%`);
+  $('.tracking-sliders').style.setProperty('--tracking-start', `${(settings.trackingMin + .08) / .16 * 100}%`);
+  $('.tracking-sliders').style.setProperty('--tracking-end', `${(settings.trackingMax + .08) / .16 * 100}%`);
 }
 for (const [id, control] of Object.entries(controls)) {
   $<HTMLInputElement>(`#${id}`).addEventListener('input', event => {
@@ -399,7 +399,7 @@ for (const [id, control] of Object.entries(controls)) {
     $(`#${id}-value`).textContent = formatControl(id, n, control.unit);
     if (id.startsWith('tracking-')) updateTrackingRange();
     if (id === 'sync') $('#harmony-note').textContent = n === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice.';
-    // Tracking, rag, harmony and ending weights re-rank the same text; only a
+    // Tracking, rag, firmness, harmony and ending weights re-rank the same text; only a
     // type-size change invalidates the paragraph geometry.
     schedule(id === 'font-size');
   });

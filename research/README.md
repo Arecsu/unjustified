@@ -45,7 +45,7 @@ C_line(t) = A (f + kt − target)² + B t² + line_tax
 t* = clamp(Ak(target − f)/(Ak² + B), trackingMin, trackingMax)
 ```
 
-The implementation uses `A=100`, `B=1000`, and `target=1−rag`. The two UI handles independently control a nonpositive lower bound and a nonnegative upper bound; zero is always permitted. This supports asymmetric, shrink-only, expand-only, and untracked experiments. A feasible negative tracking adjustment may be needed to fit a borderline word. The quadratic minimum is exact for this local surrogate before feasibility constraints; the complete objective adds transition and ending costs afterward.
+The implementation uses `A=100`, `B=1000·r`, and `target=1−rag`, where `r = max(0.002, (1−firmness)²)`. The same factor `r` scales the per-line tracking cost and the line-to-line tracking-change cost, and the fill tolerance around the target narrows from 0.10 to 0.02 as firmness goes from 0 to 1. Firmness 0 (the default) reproduces the original model exactly. The two UI handles independently control a nonpositive lower bound and a nonnegative upper bound; zero is always permitted. This supports asymmetric, shrink-only, expand-only, and untracked experiments. A feasible negative tracking adjustment may be needed to fit a borderline word. The quadratic minimum is exact for this local surrogate before feasibility constraints; the complete objective adds transition and ending costs afterward.
 
 Final lines use a one-sided shortage cost below the chosen minimum, plus a single-word penalty when protection is enabled. Single-line paragraphs are exempt. A soft overflow penalty permits an indivisible oversized word to remain intact. Adjacent-line penalties discourage abrupt changes in tracking and ordinary line lengths.
 

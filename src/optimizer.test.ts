@@ -163,3 +163,14 @@ test('larger documents use a bounded search and still preserve all text', () => 
   result.paragraphs.forEach((p, i) => assert.deepEqual(p.lines.flatMap(l => wordsOf(l.text)), wordsOf(input[i])));
   assert.ok(Number.isFinite(result.cost));
 });
+
+test('edge firmness spends tracking to even the edge, and zero changes nothing', () => {
+  const loose = { ...settings, trackingMin: -0.08, trackingMax: 0.08, rag: 0 };
+  assert.deepEqual(compose(texts, measure, { ...settings, firmness: 0 }), compose(texts, measure, settings));
+  const before = metrics(compose(texts, measure, loose).paragraphs, loose);
+  const firm = { ...loose, firmness: 1 };
+  const after = metrics(compose(texts, measure, firm).paragraphs, firm);
+  assert.ok(after.deviation < before.deviation / 4, `${after.deviation} vs ${before.deviation}`);
+  assert.ok(after.maxTracking <= 0.08 + 1e-9);
+  assert.equal(after.overflow, false);
+});

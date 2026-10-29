@@ -26,6 +26,9 @@ export interface Settings {
   rag: number; // Desired inset of ordinary line endings, fraction of measure.
   minEnding: number;
   sync: number; // 0–1, document-level shape coupling.
+  /** 0–1. Trades tracking restraint for an even edge: 0 is the ragged default,
+   *  1 spends the tracking bounds freely to pull lines onto the rag target. */
+  firmness?: number;
   protectEndings: boolean;
 }
 
@@ -55,11 +58,17 @@ export interface Composition {
 export type Measure = (text: string) => number;
 const square = (n: number) => n * n;
 const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(low, n));
+/** How strongly tracking and its line-to-line changes are resisted, relative to
+ *  the default (1 at firmness 0). Floored so the tracking solve stays defined. */
+const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
+/** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
+const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
+
 export const wordsOf = (text: string): string[] => text.trim().split(/\s+/u).filter(Boolean);
 
 function lineCost(line: Line, final: boolean, only: boolean, settings: Settings): number {
   if (line.overflow) return 500 + square(line.fill - 1) * 100;
-  const track = 0.10 * square(line.tracking / 0.01);
+  const track = 0.10 * restraint(settings) * square(line.tracking / 0.01);
   if (only) return track;
   if (final) {
     // Short endings are a soft constraint: impossible cases remain renderable.
@@ -68,14 +77,14 @@ function lineCost(line: Line, final: boolean, only: boolean, settings: Settings)
       ? 240 * square(shortage) + (line.end - line.start === 1 ? 18 : 0)
       : 0);
   }
-  return 1.4 + square((line.fill - (1 - settings.rag)) / 0.10) + track
+  return 1.4 + square((line.fill - (1 - settings.rag)) / fillTolerance(settings)) + track
     + 80 * square(Math.max(0, 0.68 - line.fill));
 }
 
-function transition(a: Line | undefined, b: Line, final: boolean): number {
+function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): number {
   if (!a) return 0;
   // Keep line-to-line tracking changes subtle. Final lines are allowed to relax.
-  return 0.035 * square((a.tracking - b.tracking) / 0.01)
+  return 0.035 * restraint(s) * square((a.tracking - b.tracking) / 0.01)
     + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12));
 }
 
@@ -93,7 +102,7 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     // Minimize A(f + k·t − target)² + B·t² analytically, then clamp.
     const target = final ? s.minEnding : 1 - s.rag;
     const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
-    const b = 1000;
+    const b = 1000 * restraint(s);
     tracking = clamp(a * coefficient * (target - naturalFill)
       / (a * coefficient * coefficient + b), s.trackingMin, s.trackingMax);
     // Use bounded negative tracking to admit a word that just barely doesn't fit.
@@ -147,7 +156,7 @@ export function greedy(text: string, measure: Measure, s: Settings): Layout {
 export function scoreParagraph(lines: Line[], s: Settings): number {
   return lines.reduce((sum, line, i) => sum
     + lineCost(line, i === lines.length - 1, lines.length === 1, s)
-    + transition(lines[i - 1], line, i === lines.length - 1), 0);
+    + transition(lines[i - 1], line, i === lines.length - 1, s), 0);
 }
 
 /**
@@ -340,7 +349,7 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
       for (let i = 0; i < predecessors.length; i++) {
         const path = predecessors[i];
         bucket.push(pool.push(path, pool.cost[path] + cost
-          + transition(pool.line[path] ?? undefined, line, final), line));
+          + transition(pool.line[path] ?? undefined, line, final, s), line));
         explored++;
       }
       // Bound transient memory on long paragraphs.
