@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Unjustified bench</title>
+  <style>
+    html { font-size: 16px; }
+    body { margin: 0; background: #f5f4ef; color: #23261d; font-family: system-ui, sans-serif; }
+    #paper { padding: 2rem; display: flex; justify-content: center; }
+    #column {
+      width: min(var(--measure, 24.375rem), 100%);
+      font-family: var(--reading-font, "Source Serif 4 Variable", Georgia, serif);
+      font-size: var(--type-size, 1.1875rem);
+      line-height: 1.55;
+      text-align: left;
+      font-optical-sizing: none;
+    }
+    #column p { margin: 0 0 1.25em; }
+    #column .composed-line { display: inline-block; width: 100%; white-space: pre; }
+    #column .line-text { display: inline-block; white-space: pre; }
+    #column .moved-word { text-decoration: underline; }
+    .composed-paragraph { line-height: 0; }
+    #column p.composed-paragraph > .composed-line { line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <div id="paper"><div id="column" class="reading-column"></div></div>
+  <script type="module" src="/bench/dom-bench.ts"></script>
+</body>
+</html>

@@ -55,9 +55,20 @@ test('native partial copy preserves sentences and real paragraph boundaries', as
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/'); await settled(page);
   const expected = await page.evaluate(() => {
+    // Composed lines hold plain text unless word highlighting is on, so walk to
+    // the first/last text node instead of assuming per-word spans.
+    const walk = (node: Node | null, edge: 'first' | 'last'): Node => {
+      let current = node!;
+      while (current.nodeType !== Node.TEXT_NODE) {
+        const next = edge === 'first' ? current.firstChild : current.lastChild;
+        if (!next) break;
+        current = next;
+      }
+      return current;
+    };
     const ps = document.querySelectorAll('#optimized p');
-    const start = ps[0].querySelectorAll('.line-text')[1].firstChild!.firstChild!;
-    const end = ps[1].querySelectorAll('.line-text')[2].lastChild!.firstChild!;
+    const start = walk(ps[0].querySelectorAll('.line-text')[1].firstChild, 'first');
+    const end = walk(ps[1].querySelectorAll('.line-text')[2].lastChild, 'last');
     const range = document.createRange(); range.setStart(start, 1); range.setEnd(end, 2);
     const first = document.createRange(); first.selectNodeContents(ps[0]); first.setStart(start, 1);
     const second = document.createRange(); second.selectNodeContents(ps[1]); second.setEnd(end, 2);

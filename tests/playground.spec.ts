@@ -13,6 +13,109 @@ async function setRange(page: Page, id: string, value: number) {
   await settled(page);
 }
 
+test('column width changes real geometry with keyboard and pointer input', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  const slider = page.locator('#measure');
+  const expectWidth = async (width: number) => {
+    await settled(page);
+    await expect.poll(() => page.evaluate(() => ({
+      baseline: document.querySelector('#baseline')!.getBoundingClientRect().width,
+      optimized: document.querySelector('#optimized')!.getBoundingClientRect().width,
+      composed: (window as any).__composition.settings.width,
+    }))).toEqual({ baseline: width, optimized: width, composed: width });
+  };
+  await slider.focus();
+  await slider.press('Home');
+  await expectWidth(240);
+  await slider.press('ArrowRight');
+  await expectWidth(242);
+  const box = (await slider.boundingBox())!;
+  await slider.click({ position: { x: box.width * .25, y: box.height / 2 } });
+  const requested = Number(await slider.inputValue());
+  expect(requested).toBeGreaterThan(242);
+  await expectWidth(requested);
+});
+
+for (const replyDelay of [0, 45]) {
+  test(`continuous width input keeps painting while dragging (${replyDelay}ms worker latency)`, async ({ page }) => {
+    if (replyDelay) {
+      await page.route(/\/composer\.worker[^/]*\.(?:ts|js)(?:\?|$)/, async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, body: `
+          const post = self.postMessage.bind(self);
+          self.postMessage = message => 'id' in message
+            ? setTimeout(() => post(message), ${replyDelay}) : post(message);
+          ${await response.text()}
+        ` });
+      });
+    }
+    await page.goto('/');
+    await settled(page);
+    const progress = await page.evaluate(async () => {
+      const input = document.querySelector<HTMLInputElement>('#measure')!;
+      let previous = (window as any).__composition;
+      const widths: number[] = [], commits: number[] = [];
+      const started = performance.now();
+      for (let frame = 0; frame < 48; frame++) {
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+        const data = (window as any).__composition;
+        if (data !== previous) {
+          previous = data;
+          widths.push(data.settings.width);
+          commits.push(performance.now() - started);
+        }
+        input.value = String(270 + frame * 2);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      return { widths, commits, duration: performance.now() - started };
+    });
+    console.log(`live drag (${replyDelay}ms latency): ${progress.commits.length} commits over ${Math.round(progress.duration)}ms`);
+    // Check intermediate results, not merely the final width after pointer-up.
+    // The slow-worker case also catches continually rejecting superseded work.
+    expect(progress.commits.length).toBeGreaterThan(replyDelay ? 4 : 12);
+    expect(new Set(progress.widths).size).toBe(progress.widths.length);
+    expect(progress.commits[0]).toBeLessThan(200);
+    await settled(page);
+    await expect.poll(() => page.evaluate(() => (window as any).__composition.settings.width)).toBe(364);
+    await expect(page.locator('#status')).not.toHaveClass(/is-busy/);
+  });
+}
+
+test('every composition slider sends its new setting to the engine', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  for (const [id, key, value] of [
+    ['font-size', 'fontSize', 20],
+    ['tracking-min', 'trackingMin', -.011],
+    ['tracking-max', 'trackingMax', .013],
+    ['rag', 'rag', .06],
+    ['sync', 'sync', .70],
+    ['ending', 'minEnding', .33],
+  ] as const) {
+    await page.locator(`#${id}`).press('ArrowRight');
+    await settled(page);
+    await expect.poll(() => page.evaluate(key => (window as any).__composition.settings[key], key)).toBeCloseTo(value, 8);
+  }
+});
+
+test('slow module evaluation does not lose the first worker messages', async ({ page }) => {
+  await page.route(/\/composer\.worker[^/]*\.(?:ts|js)(?:\?|$)/, async route => {
+    const response = await route.fetch();
+    // Model an async dev-server import: the worker event loop is running but
+    // the module has not installed its message handler yet.
+    await route.fulfill({ response, body: `await new Promise(resolve => setTimeout(resolve, 500));\n${await response.text()}` });
+  });
+  await page.goto('/');
+  await settled(page);
+  expect(await page.evaluate(() => {
+    const state = (window as any).__worker;
+    return { booted: state.booted, ready: state.ready, dead: state.dead, fallback: state.fallback };
+  })).toEqual({ booted: true, ready: true, dead: false, fallback: false });
+  await setRange(page, 'measure', 300);
+  await expect.poll(() => page.evaluate(() => (window as any).__composition.settings.width)).toBe(300);
+});
+
 for (const width of [320, 375, 600, 768, 1024, 1440]) {
   test(`recomposes accurately without horizontal overflow at ${width}`, async ({ page }) => {
     const errors: string[] = [];
@@ -97,7 +200,7 @@ test('editor validates, escapes markup, and reports impossible words', async ({ 
   await page.locator('#edit-text').click();
   await page.locator('#text-editor').fill('');
   await page.locator('#apply-text').click();
-  await expect(page.locator('#editor-error')).toContainText('1–8 paragraphs');
+  await expect(page.locator('#editor-error')).toContainText('1–60 paragraphs');
   await page.locator('#text-editor').fill('A literal <img src=x onerror=alert(1)> is plain text.\n\nA second paragraph with enough text to occupy a couple of lines comfortably.');
   await page.locator('#apply-text').click();
   await settled(page);

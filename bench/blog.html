@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>A blog post, composed</title>
+  <style>
+    html { font-size: 16px; }
+    body { margin: 0; background: #fbfaf7; color: #22251c; }
+    * { box-sizing: border-box; }
+    .masthead { height: 4.5rem; display: flex; align-items: center; padding: 0 2rem; border-bottom: 1px solid #e2e3d9; font: 500 0.75rem system-ui, sans-serif; letter-spacing: .08em; }
+    .masthead b { font: 600 1.05rem Georgia, serif; letter-spacing: -.04em; }
+    .masthead span { margin-left: auto; color: #8b8f80; }
+    main { max-width: 42rem; margin: 0 auto; padding: 3rem 1.5rem 6rem; }
+    h1 { font: 400 2.6rem/1.15 Georgia, serif; letter-spacing: -.02em; margin: 0 0 .75rem; }
+    .byline { font: 400 .8rem/1.6 system-ui, sans-serif; color: #7d8270; margin: 0 0 2.5rem; }
+    .figure { height: 12rem; background: #eef0e6; display: grid; place-items: center; color: #9aa08c; font: 400 .7rem system-ui, sans-serif; margin: 0 0 2rem; }
+    #article {
+      font-family: "Source Serif 4 Variable", Georgia, serif;
+      font-size: 1.1875rem;
+      line-height: 1.55;
+      font-optical-sizing: none;
+    }
+    #article p { margin: 0 0 1.25em; }
+    #article.composed p { line-height: 0; }
+    #article.composed .composed-line { display: inline-block; width: 100%; white-space: pre; line-height: 1.55; }
+    #article .line-text { white-space: pre; }
+    .colophon { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #e2e3d9; font: 400 .7rem system-ui, sans-serif; color: #8b8f80; }
+    .skeleton { background: #eeece5; border-radius: 2px; }
+  </style>
+</head>
+<body>
+  <header class="masthead"><b>unjustified.</b><span>NO. 001</span></header>
+  <main>
+    <h1>A better kind of ragged</h1>
+    <p class="byline">An experiment in paragraph composition · 8 min read</p>
+    <div class="figure">figure</div>
+    <div id="article"></div>
+    <div class="colophon">© An experiment. Words by a seeded generator.</div>
+  </main>
+  <script type="module" src="/bench/blog.ts"></script>
+</body>
+</html>
