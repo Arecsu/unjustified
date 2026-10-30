@@ -4,12 +4,12 @@
   padding: 0;
   margin: 1.1875rem 0 0;
 }
-.tracking-control legend { font-size: .625rem; font-weight: 500; padding: 0; }
+.tracking-control legend { font-size: 0.8125rem; font-weight: 500; padding: 0; }
 .tracking-values {
   display: flex;
   justify-content: space-between;
   margin-top: .625rem;
-  font-size: .625rem;
+  font-size: 0.8125rem;
   color: #737966;
   font-variant-numeric: tabular-nums;
 }
@@ -61,6 +61,6 @@
 .tracking-sliders input:focus-visible { outline-offset: .125rem; }
 .tracking-control .control-note { margin-top: .625rem; }
 @media (max-width: 47.5rem) {
-  .tracking-control legend { font-size: .6875rem; }
+  .tracking-control legend { font-size: 0.875rem; }
   .tracking-sliders input::-webkit-slider-thumb { width: .9375rem; height: .9375rem; margin-top: -.40625rem; }
 }

@@ -45,7 +45,7 @@
   display: flex;
   gap: 1.875rem;
   align-self: stretch;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 .site-header nav a {
@@ -67,12 +67,12 @@
   background: var(--accent);
 }
 .site-header nav a span {
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   color: var(--accent);
 }
 .edition {
   margin-left: auto;
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   letter-spacing: 0.075rem;
   color: #77796e;
   white-space: nowrap;
@@ -96,7 +96,7 @@ main {
   gap: 2.1875rem;
 }
 .eyebrow {
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   letter-spacing: 0.103125rem;
   font-weight: 600;
   line-height: 1.5;
@@ -125,18 +125,18 @@ main {
   max-width: 23.125rem;
 }
 .hero-note p {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.8;
   margin: 0;
   color: #7b7e72;
 }
 .hero-note p:first-child {
   color: #474a3e;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   margin-bottom: 0.25rem;
 }
 .hero-note a {
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   margin-top: 0.9375rem;
   display: inline-flex;
   gap: 1rem;
@@ -169,7 +169,7 @@ main {
   font-weight: 400;
 }
 .method-section>div>p {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   line-height: 1.9;
   max-width: 25rem;
   color: #868c7c;
@@ -188,16 +188,16 @@ main {
   position: absolute;
   left: 0;
   top: 0.125rem;
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   color: var(--accent);
 }
 .method-steps h3 {
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   font-weight: 500;
   margin: 0 0 0.4375rem;
 }
 .method-steps p {
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   line-height: 1.8;
   margin: 0;
   color: #8b917f;
@@ -219,7 +219,7 @@ main {
   margin: 0.8125rem 0 0;
 }
 .research-count {
-  font-size: 0.5rem;
+  font-size: 0.75rem;
   letter-spacing: 0.075rem;
   color: #999e90;
   padding-bottom: 0.3125rem;
@@ -248,7 +248,7 @@ main {
   border-color: #e4d7c5;
 }
 .source-meta {
-  font-size: 0.4375rem;
+  font-size: 0.6875rem;
   letter-spacing: 0.0625rem;
   color: #8c9680;
   display: flex;
@@ -268,13 +268,13 @@ main {
   max-width: 16.25rem;
 }
 .source-card p {
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   line-height: 1.9;
   color: #89917e;
   margin: 0 0 1.25rem;
 }
 .source-link {
-  font-size: 0.5rem;
+  font-size: 0.75rem;
   color: #717f60;
   display: flex;
   justify-content: space-between;
@@ -309,11 +309,11 @@ main {
   gap: 0.3125rem;
 }
 .library-links strong {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 .library-links> a>div>span {
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   color: #969f89;
 }
 .library-links>a>span:last-child {
@@ -331,7 +331,7 @@ main {
 .algorithm-notes summary {
   list-style: none;
   cursor: pointer;
-  font-size: 0.625rem;
+  font-size: 0.8125rem;
   color: #818b72;
   display: flex;
   justify-content: space-between;
@@ -343,14 +343,14 @@ main {
   font-size: 1.0625rem;
 }
 .algorithm-notes>div {
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   line-height: 1.9;
   color: #7c876f;
   max-width: 53.125rem;
   padding-top: 0.9375rem;
 }
 .algorithm-notes pre {
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   color: #6b765c;
   background: #eaece2;
   padding: 1.25rem;
@@ -376,11 +376,11 @@ main {
   letter-spacing: -0.05rem;
 }
 .site-footer p {
-  font: italic 0.75rem var(--serif);
+  font: italic 0.875rem var(--serif);
   color: #929b84;
 }
 .site-footer>span {
-  font-size: 0.4375rem;
+  font-size: 0.6875rem;
   letter-spacing: 0.0625rem;
   color: #a0a790;
 }
@@ -424,11 +424,11 @@ dialog label {
   display: flex;
   justify-content: space-between;
   gap: 0.625rem;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   margin: 1.1875rem 0 0.5625rem;
 }
 dialog label>span {
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   color: #90997f;
 }
 dialog select {
@@ -437,7 +437,7 @@ dialog select {
   padding: 0.625rem;
   border-radius: 0.1875rem;
   color: #566048;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   width: 100%;
 }
 dialog textarea {
@@ -454,7 +454,7 @@ dialog textarea {
 }
 dialog .eyebrow {
   color: #8b957c;
-  font-size: 0.5rem;
+  font-size: 0.75rem;
 }
 .editor-bottom {
   display: flex;
@@ -464,7 +464,7 @@ dialog .eyebrow {
   margin-top: 1.125rem;
 }
 .editor-bottom>span {
-  font-size: 0.5625rem;
+  font-size: 0.8125rem;
   color: #90997e;
   max-width: 15rem;
   line-height: 1.6;
@@ -474,7 +474,7 @@ dialog .eyebrow {
   color: white;
   border-radius: 0.1875rem;
   padding: 0.6875rem 0.9375rem;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   white-space: nowrap;
   min-height: 2.5rem;
 }
@@ -483,7 +483,7 @@ dialog .eyebrow {
 }
 .error-message {
   color: var(--accent);
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   margin-bottom: 0;
 }
 .error-message:empty {
@@ -498,7 +498,7 @@ dialog .eyebrow {
   color: #f8f9ef;
   border: 0.0625rem solid #5b674b;
   padding: 0.8125rem 1.25rem;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   border-radius: 0.3125rem;
   box-shadow: 0 0.25rem 2.1875rem #38442a20;
   z-index: 20;
