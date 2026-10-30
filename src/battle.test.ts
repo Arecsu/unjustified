@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import { compose, metrics, scoreDocument, shapeDistance, wordsOf } from './optimizer';
 import type { Composition, Layout, Line, Settings } from './optimizer';
 import { trackingAdvances } from './text-metrics';
-import { hasArabic, hasJapanese, segmentText } from './language';
+import { hasArabic, hasJapanese, normalizeText, segmentText } from './language';
+import { hyphenationPoints, loadHyphenator } from './hyphenation';
 import { bestSite, placeKashida } from './kashida';
 import { samples } from './samples';
 import { makeParagraphs } from '../bench/corpus';
@@ -40,6 +41,10 @@ const corpus = {
     '“Quoted,” he said — then paused… (briefly).', '   ', 'One two'],
 };
 type Doc = keyof typeof corpus;
+/** English hyphenation points for every word of the corpus. */
+const english = await loadHyphenator('en-us');
+const hyphenation = hyphenationPoints(Object.values(corpus).flat(), english, { minWord: 6, minBefore: 2, minAfter: 3 });
+const hyphenated = (s: Settings, frequency = 0.5) => ({ ...s, hyphenation, hyphenPenalty: 0.01 + 0.19 * (1 - frequency) ** 2 });
 
 function run(doc: Doc, s: Settings): Composition {
   return compose(corpus[doc], measureFor(s.fontSize), s, measureAtFor(s.fontSize));
@@ -58,19 +63,30 @@ function checkInvariants(doc: Doc, s: Settings, c: Composition) {
   c.paragraphs.forEach((p: Layout, i) => {
     const text = texts[i];
     const arabic = hasArabic(text);
-    const { units, separator } = segmentText(text);
-    // Words, order and paragraph boundaries survive; lines tile the paragraph.
-    if (!hasJapanese(text)) assert.deepEqual(p.lines.flatMap(l => wordsOf(l.text)), wordsOf(text), where);
-    // Lines rebuild the paragraph exactly from its own break units (Japanese has no spaces).
-    assert.equal(p.lines.map(l => l.text).join(separator), units.join(separator).trimEnd(), where);
+    const { units, separator, joins } = segmentText(text, s.hyphenation);
+    // Lines, joined by what separates them, rebuild the paragraph exactly.
+    const rebuilt = p.lines.map((l, j) => l.text + (j < p.lines.length - 1 ? joins[l.end - 1] : '')).join('');
+    assert.equal(rebuilt, normalizeText(text), where);
+    if (!s.hyphenation && !hasJapanese(text)) assert.deepEqual(p.lines.flatMap(l => wordsOf(l.text)), wordsOf(text), where);
     let cursor = 0;
     p.lines.forEach((l: Line, j) => {
       const at = `${where} ¶${i} line ${j} "${l.text}"`;
       assert.equal(l.start, cursor, at); cursor = l.end;
       const final = j === p.lines.length - 1;
-      // Overflow only for a line that is a single unbreakable unit.
-      if (l.overflow) assert.equal(l.end - l.start, 1, `overflow: ${at}`);
+      // Overflow only for a line holding a single whole word.
+      if (l.overflow) assert.ok(separator ? !/\s/u.test(l.text) && !l.hyphen : l.end - l.start === 1, `overflow: ${at}`);
       else assert.ok(l.width <= s.width + 0.05, `too wide ${l.width}: ${at}`);
+      // Hyphens: never on a last line, only at a dictionary point of a long enough word.
+      if (l.hyphen) {
+        assert.ok(!final && s.hyphenation && joins[l.end - 1] === '', `hyphen: ${at}`);
+        // Rebuild the whole word around the break: the break must be one of its points.
+        let first = l.end - 1, last = l.end;
+        while (first > 0 && joins[first - 1] === '') first--;
+        while (last < units.length && joins[last - 1] === '') last++;
+        const word = units.slice(first, last).join('');
+        const offset = units.slice(first, l.end).join('').length;
+        assert.ok(s.hyphenation![word]?.includes(offset), `hyphen at ${offset} not a point of ${word}: ${at}`);
+      }
       // No short body lines except where nothing else fits.
       if (!final && !l.overflow) assert.ok(l.fill >= 0.5, `body line at ${l.fill}: ${at}`);
       // Tool bounds and script rules.
@@ -90,8 +106,9 @@ function checkInvariants(doc: Doc, s: Settings, c: Composition) {
       assert.ok(Number.isInteger(l.stretch) && l.stretch >= floor && l.stretch <= 100, `stretch ${l.stretch}: ${at}`);
       // The reported width is the natural width plus exactly these adjustments.
       if (l.stretch === 100) {
-        const spaces = separator ? l.end - l.start - 1 : 0;
-        const expected = l.natural + trackingAdvances(l.text) * l.tracking * s.fontSize
+        let spaces = 0;
+        for (let k = l.start; k < l.end - 1; k++) if (joins[k] && separator) spaces++;
+        const expected = l.natural + (trackingAdvances(l.text) + (l.hyphen ? 1 : 0)) * l.tracking * s.fontSize
           + spaces * l.wordSpacing * s.fontSize + l.kashidaWidth;
         assert.ok(Math.abs(l.width - expected) < 1e-6, `width ${l.width} vs ${expected}: ${at}`);
       }
@@ -115,6 +132,7 @@ const grid: Settings[] = [
   { ...base, wordSpacingMin: -0.5, wordSpacingMax: 0.5 }, { ...base, kashida: 4 }, { ...base, widthFlex: 0.4 },
   { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 10 },
   { ...base, sync: 0 }, { ...base, sync: 1 },
+  hyphenated(base), hyphenated({ ...base, width: 240, rag: 0, firmness: 1 }, 1), hyphenated({ ...base, sync: 1 }, 0),
   { ...base, protectEndings: false }, { ...base, minEnding: 0.6 }, { ...base, minEnding: 0.15 },
   // The nearly-justified preset, and everything at once.
   { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 },
@@ -278,5 +296,29 @@ test('nearly justified: the preset makes every body line flush in every script i
   for (const doc of [...latin, 'arabic'] as Doc[]) {
     const c = run(doc, preset);
     assert.ok(shortest(c) > 0.97, `${doc}: shortest body line ${shortest(c)}`);
+  }
+});
+
+test('hyphenation: frequent hyphens even a narrow edge, rare ones are rarer, none without points', () => {
+  const narrow = { ...base, width: 240, rag: 0, firmness: 1 };
+  const hyphens = (s: Settings) => latin.reduce((n, d) => n + run(d, s).paragraphs.flatMap(p => p.lines).filter(l => l.hyphen).length, 0);
+  const none = sum(latin, d => deviation(run(d, narrow), narrow));
+  const frequent = hyphenated(narrow, 1);
+  assert.ok(sum(latin, d => deviation(run(d, frequent), frequent)) < none, 'frequent hyphens should even the edge');
+  assert.ok(hyphens(hyphenated(narrow, 0)) < hyphens(frequent), `rare ${hyphens(hyphenated(narrow, 0))} vs frequent ${hyphens(frequent)}`);
+  assert.equal(hyphens(narrow), 0);
+  // Arabic and Japanese never hyphenate, even with points supplied.
+  for (const doc of ['arabic', 'japanese'] as Doc[]) {
+    assert.ok(run(doc, hyphenated(narrow, 1)).paragraphs.every(p => p.lines.every(l => !l.hyphen)), doc);
+  }
+});
+
+test('hyphenation points keep the required letters on both sides', () => {
+  const strict = hyphenationPoints(corpus.english, english, { minWord: 8, minBefore: 3, minAfter: 4 });
+  for (const [word, points] of Object.entries(strict)) {
+    const letters = word.replace(/^\P{L}+|\P{L}+$/gu, '');
+    assert.ok([...letters].length >= 8, word);
+    const lead = word.indexOf(letters);
+    for (const p of points) assert.ok(p - lead >= 3 && lead + letters.length - p >= 4, `${word} at ${p}`);
   }
 });

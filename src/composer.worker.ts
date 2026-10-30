@@ -91,7 +91,7 @@ async function searchInParallel(request: ComposeRequest, pool: Helper[]) {
   if (responses.some(response => response.error)) return undefined;
   const options: { layouts: Layout[]; explored: number }[] = new Array(request.paragraphs.length);
   for (const response of responses) for (const { index, packed } of response.results) {
-    options[index] = unpackCandidates(packed, request.paragraphs[index]);
+    options[index] = unpackCandidates(packed, request.paragraphs[index], request.settings.hyphenation);
   }
   return {
     options,

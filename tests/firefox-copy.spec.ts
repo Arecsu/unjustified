@@ -41,6 +41,18 @@ test('Firefox copies composed English as whole paragraphs', async ({ page }) => 
   expect(copied.trim()).toBe((await paragraphs(page)).join('\n\n').trim());
 });
 
+test('Firefox copies hyphenated lines as whole words', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await page.locator('#hyphenate').check({ force: true });
+  await setRange(page, 'measure', 260);
+  await setRange(page, 'hyphen-frequency', 100);
+  await expect(page.locator('#optimized .hyphen').first()).toBeAttached();
+  const copied = await dragCopy(page);
+  expect(copied).not.toContain('-\n');
+  expect(copied.trim()).toBe((await paragraphs(page)).join('\n\n').trim());
+});
+
 test('Firefox copies Arabic with kashida and diagnostics as the original text', async ({ page }) => {
   await page.goto('/');
   await page.locator('#language').selectOption('ar');

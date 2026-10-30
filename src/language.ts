@@ -15,7 +15,31 @@ export function directionFor(text: string, policy: DirectionPolicy): Direction {
   return 'ltr';
 }
 export const normalizeText = (text: string) => text.trim().replace(/[\t\n\r\f ]+/g, ' ');
-export function segmentText(text: string): { units: string[]; separator: string } {
+/** Hyphenation points per word: UTF-16 offsets where a word may be broken. */
+export type Hyphenation = Record<string, number[]>;
+
+/**
+ * Break units of a paragraph. `joins[i]` is what separates unit i from unit
+ * i + 1: the separator between words, or '' inside a hyphenated word.
+ */
+export function segmentText(text: string, hyphenation?: Hyphenation): { units: string[]; separator: string; joins: string[] } {
+  const { units, separator } = segmentWords(text);
+  const joins: string[] = new Array(Math.max(0, units.length - 1)).fill(separator);
+  if (!hyphenation || !separator) return { units, separator, joins };
+  const pieces: string[] = [], pieceJoins: string[] = [];
+  units.forEach((word, i) => {
+    let last = 0;
+    for (const point of hyphenation[word] ?? []) {
+      pieces.push(word.slice(last, point)); pieceJoins.push('');
+      last = point;
+    }
+    pieces.push(word.slice(last));
+    if (i < units.length - 1) pieceJoins.push(separator);
+  });
+  return { units: pieces, separator, joins: pieceJoins };
+}
+
+function segmentWords(text: string): { units: string[]; separator: string } {
   const normalized = normalizeText(text);
   if (!hasJapanese(normalized)) return { units: normalized ? normalized.split(' ') : [], separator: ' ' };
   // UAX #14 opportunities preserve Japanese punctuation groups without inserting

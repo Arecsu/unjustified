@@ -1,6 +1,6 @@
 import type { Layout } from './optimizer';
 import { detectLanguage, directionFor, segmentText, hasArabic } from './language';
-import type { DirectionPolicy } from './language';
+import type { DirectionPolicy, Hyphenation } from './language';
 import { placeKashida, splitAtSite, TATWEEL } from './kashida';
 
 /**
@@ -35,6 +35,8 @@ export interface RenderOptions {
   onInspect?: (paragraph: number, line: number) => void;
   /** Base letter-spacing in em; line tracking is relative to it. Not for Arabic. */
   letterSpacing?: number;
+  /** The hyphenation points the composition used, so words split identically. */
+  hyphenation?: Hyphenation;
 }
 
 /**
@@ -63,27 +65,30 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
   const paragraphs: string[] = [];
   layouts.forEach((layout, pIndex) => {
     const text = source[pIndex] ?? '';
-    const { units, separator } = segmentText(text);
+    const { units, separator, joins } = segmentText(text, options.hyphenation);
     const lang = detectLanguage(text);
     const dir = directionFor(text, direction);
     const base = hasArabic(text) ? 0 : options.letterSpacing ?? 0;
     // One pass over the baseline instead of a linear scan per word.
-    const unitLine = highlight ? new Int32Array(units.length).fill(-1) : undefined;
-    if (unitLine) {
+    // The baseline counts whole words; hyphenation may split them into pieces.
+    const wordLine = highlight ? new Int32Array(units.length).fill(-1) : undefined;
+    if (wordLine) {
       baseline[pIndex]?.lines.forEach((line, lineIndex) => {
-        for (let i = line.start; i < line.end && i < unitLine.length; i++) unitLine[i] = lineIndex;
+        for (let i = line.start; i < line.end && i < wordLine.length; i++) wordLine[i] = lineIndex;
       });
     }
+    const wordOf = new Int32Array(units.length);
+    for (let i = 1; i < units.length; i++) wordOf[i] = wordOf[i - 1] + (joins[i - 1] || !separator ? 1 : 0);
     const lines: string[] = [];
     layout.lines.forEach((line, lineIndex) => {
       let inner = '';
       const tatweels = line.kashida ? placeKashida(units.slice(line.start, line.end), line.kashida) : undefined;
       for (let i = line.start; i < line.end; i++) {
         const unit = i === line.end - 1 ? units[i].trimEnd() : units[i];
-        if (i > line.start) inner += escapeHtml(separator);
+        if (i > line.start) inner += escapeHtml(joins[i - 1]);
         const word = tatweels?.[i - line.start] ? kashidaHtml(unit, tatweels[i - line.start]) : escapeHtml(unit);
         if (highlight) {
-          const moved = unitLine![i] !== lineIndex ? ' class="moved-word"' : '';
+          const moved = wordLine![wordOf[i]] !== lineIndex ? ' class="moved-word"' : '';
           inner += `<span${moved}>${word}</span>`;
         } else {
           inner += word;
@@ -92,8 +97,11 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
       // Native copy: preserve source separators inside inline boxes, not block
       // wrappers or fake linebreaks. Japanese boundaries usually have no space.
       // The separator sits outside `.line-text`, which measures ink only.
+      // A hyphenated line ends inside a word: no separator, and a drawn hyphen
+      // (generated content, so copying rejoins the word).
+      if (line.hyphen) inner += '<span class="hyphen" aria-hidden="true"></span>';
       const trailing = lineIndex < layout.lines.length - 1
-        ? escapeHtml(separator || (/\s$/u.test(units[line.end - 1] ?? '') ? ' ' : ''))
+        ? escapeHtml(separator ? joins[line.end - 1] ?? '' : /\s$/u.test(units[line.end - 1] ?? '') ? ' ' : '')
         : '';
       lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
         + ` style="letter-spacing:${base + line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`

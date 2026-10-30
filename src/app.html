@@ -42,6 +42,13 @@
             {{range:word-spacing-min}}
             {{range:word-spacing-max}}
             <p id="word-spacing-note" class="control-note">How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.</p>
+            <label class="toggle-row" for="hyphenate"><span>Hyphenation</span><input type="checkbox" id="hyphenate" /><span class="switch" aria-hidden="true"></span></label>
+            <label class="select-label spaced-label" for="hyphen-language">Hyphenation language</label><div class="select-wrap"><select id="hyphen-language"><option value="auto">Auto (from the text)</option></select><span aria-hidden="true">⌄</span></div>
+            {{range:hyphen-frequency}}
+            {{range:hyphen-min-word}}
+            {{range:hyphen-before}}
+            {{range:hyphen-after}}
+            <p id="hyphen-note" class="control-note">Breaks words at dictionary hyphenation points. Auto uses English for Latin-script text; choose the language for other texts. Copying rejoins hyphenated words.</p>
             {{range:kashida}}
             <p id="kashida-note" class="control-note">Arabic only: lengthens joins with tatweel (ـ), following the traditional priority. Copying returns the text without them.</p>
             {{range:width-flex}}

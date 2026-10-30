@@ -8,7 +8,7 @@ import type { LineColumns, SearchResult } from './optimizer';
 interface Exports {
   memory: WebAssembly.Memory;
   input(lines: number): number;
-  run(lines: number, total: number, beam: number, restraint: number, fontSize: number): number;
+  run(lines: number, total: number, beam: number, restraint: number, fontSize: number, stack: number): number;
   output(): number;
   output_len(): number;
   explored(): number;
@@ -19,15 +19,15 @@ interface Exports {
 
 export function searchKernel(instance: WebAssembly.Instance) {
   const wasm = instance.exports as unknown as Exports;
-  return (t: LineColumns, total: number, beam: number, restraint: number, fontSize: number): SearchResult => {
+  return (t: LineColumns, total: number, beam: number, restraint: number, fontSize: number, stack: number): SearchResult => {
     const n = t.start.length;
     // Take views only after calls that may grow memory.
     const pointer = wasm.input(n);
-    const input = new Float64Array(wasm.memory.buffer, pointer, n * 9);
+    const input = new Float64Array(wasm.memory.buffer, pointer, n * 10);
     input.set(t.start, 0); input.set(t.end, n); input.set(t.cost, 2 * n); input.set(t.tracking, 3 * n);
     input.set(t.wordSpacing, 4 * n); input.set(t.kashida, 5 * n); input.set(t.kashidaWidth, 6 * n);
-    input.set(t.stretch, 7 * n); input.set(t.fill, 8 * n);
-    const count = wasm.run(n, total, beam, restraint, fontSize);
+    input.set(t.stretch, 7 * n); input.set(t.fill, 8 * n); input.set(t.hyphen, 9 * n);
+    const count = wasm.run(n, total, beam, restraint, fontSize, stack);
     const outPointer = wasm.output(), outLength = wasm.output_len();
     const out = new Float64Array(wasm.memory.buffer, outPointer, outLength);
     const retained: SearchResult['retained'] = [];

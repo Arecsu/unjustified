@@ -43,7 +43,7 @@ export function readNativeLayout(column: HTMLElement, width: number, settings: S
         lines.push({
           start: unitIndex, end: unitIndex + 1,
           text: source.slice(unitStartOffset, unitEndOffset),
-          natural, width: natural, tracking: 0, wordSpacing: 0, kashida: 0, kashidaWidth: 0, stretch: 100,
+          natural, width: natural, tracking: 0, wordSpacing: 0, kashida: 0, kashidaWidth: 0, stretch: 100, hyphen: false,
           fill: natural / width, overflow: natural > width + 1,
         });
         return;

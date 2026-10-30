@@ -10,11 +10,13 @@ import type { Typeface } from './fonts';
 import type { ComposeRequest, ComposeResponse, WorkerResponse } from './protocol';
 import { compose, metrics, wordsOf } from './optimizer';
 import type { Composition, Layout, Settings } from './optimizer';
-import { detectLanguage, directionFor, normalizeText, hasArabic, segmentText } from './language';
+import { detectLanguage, directionFor, normalizeText, hasArabic, hasJapanese, segmentText } from './language';
 import type { DirectionPolicy } from './language';
 import { readNativeLayout } from './native-layout';
 import { annotateParagraph, bindInspection, cssRem, kashidaHtml, renderOptimized, renderBaselineGuides } from './rendering';
 import { placeKashida } from './kashida';
+import { hyphenationLanguages, hyphenationPoints, loadHyphenator } from './hyphenation';
+import type { Hyphenation } from './language';
 import { renderVisualizers } from './visualizers';
 import { benchmark, publishTiming } from './benchmark';
 import type { RunTiming } from './benchmark';
@@ -86,12 +88,51 @@ function updateWidthUI() {
     ? `Condenses lines along ${typefaceNames[typeface]}'s width axis (down to ${range[0]}%), in whole steps.`
     : `${typefaceNames[typeface]} has no width axis. Try Roboto Flex or Noto Sans Arabic.`;
 }
+/** Hyphenation controls: page-side, because break points are computed here. */
+const hyphenDefaults = { enabled: false, language: 'auto', minWord: 6, minBefore: 2, minAfter: 3, frequency: 50 };
+const hyphen = { ...hyphenDefaults };
+/** A hyphen is as bad as a line this far short: 20 % at 'Rare', 1 % at 'Frequent'. */
+const hyphenPenalty = (frequency: number) => 0.01 + 0.19 * (1 - frequency / 100) ** 2;
+const hyphenControls = { 'hyphen-frequency': 'frequency', 'hyphen-min-word': 'minWord', 'hyphen-before': 'minBefore', 'hyphen-after': 'minAfter' } as const;
+function hyphenLanguage(): string | undefined {
+  if (hyphen.language !== 'auto') return hyphen.language;
+  return detectLanguage(paragraphs.join(' ')) === 'en' ? 'en-us' : undefined;
+}
+let hyphenCache: { key: string; points: Hyphenation } | undefined;
+async function hyphenationFor(texts: string[]): Promise<Hyphenation | undefined> {
+  const language = hyphen.enabled ? hyphenLanguage() : undefined;
+  if (!language) return undefined;
+  const key = `${language}:${hyphen.minWord}:${hyphen.minBefore}:${hyphen.minAfter}:${texts.join('\n')}`;
+  if (hyphenCache?.key !== key) hyphenCache = { key, points: hyphenationPoints(texts, await loadHyphenator(language), hyphen) };
+  return hyphenCache.points;
+}
+function syncHyphenControls() {
+  $<HTMLInputElement>('#hyphenate').checked = hyphen.enabled;
+  $<HTMLSelectElement>('#hyphen-language').value = hyphen.language;
+  for (const [id, key] of Object.entries(hyphenControls)) {
+    $<HTMLInputElement>(`#${id}`).value = String(hyphen[key]);
+    $(`#${id}-value`).textContent = `${hyphen[key]}${id === 'hyphen-frequency' ? '%' : id === 'hyphen-min-word' ? ' letters' : ''}`;
+  }
+}
+for (const [value, label] of hyphenationLanguages) $('#hyphen-language').append(new Option(label, value));
+$('#hyphenate').addEventListener('change', e => { hyphen.enabled = (e.target as HTMLInputElement).checked; schedule(false); });
+$('#hyphen-language').addEventListener('change', e => { hyphen.language = (e.target as HTMLSelectElement).value; schedule(false); });
+for (const [id, key] of Object.entries(hyphenControls)) $(`#${id}`).addEventListener('input', () => {
+  hyphen[key] = Number($<HTMLInputElement>(`#${id}`).value);
+  syncHyphenControls();
+  schedule(false);
+});
 function updateScriptUI() {
   const allArabic = paragraphs.every(hasArabic);
   for (const id of ['tracking-min', 'tracking-max']) $<HTMLInputElement>(`#${id}`).disabled = allArabic;
   $('#tracking-note').textContent = paragraphs.some(hasArabic)
     ? 'Arabic paragraphs keep natural connected shaping: tracking is held at zero. Other paragraphs use these limits.'
     : 'Independent shrink and expansion limits. Set either handle to zero to disable that direction.';
+  const noHyphens = paragraphs.every(text => hasArabic(text) || hasJapanese(text));
+  $<HTMLInputElement>('#hyphenate').disabled = noHyphens;
+  $('#hyphen-note').textContent = noHyphens
+    ? 'Arabic and Japanese are not hyphenated: kashida and tracking do that work.'
+    : 'Breaks words at dictionary hyphenation points. Auto uses English for Latin-script text; choose the language for other texts. Copying rejoins hyphenated words.';
   const anyArabic = paragraphs.some(hasArabic);
   $<HTMLInputElement>('#kashida').disabled = !anyArabic;
   $('#kashida-note').textContent = anyArabic
@@ -259,6 +300,8 @@ async function recompute(cold = false, scheduled = performance.now()): Promise<R
   const revision = activeRevision = canvasRevision;
   // Width flex only applies to a typeface with a width axis.
   const input = { paragraphs, settings: { ...settings, widthFlex: widthRange(typeface) ? settings.widthFlex : 0 }, typeface, direction };
+  input.settings.hyphenation = await hyphenationFor(input.paragraphs);
+  input.settings.hyphenPenalty = input.settings.hyphenation ? hyphenPenalty(hyphen.frequency) : 0;
   const started = performance.now();
   const mode = cold || !worker ? 'cold' : 'warm';
   busy = true;
@@ -373,7 +416,7 @@ function renderResult(response: ComposeResponse) {
   // composed block cannot change the document height: this is what removes the
   // layout shift when a paragraph gains or loses a line.
   renderOptimized(optEl, result.paragraphs, paragraphs, baseline, {
-    direction, inspection, onInspect: inspect, letterSpacing: settings.letterSpacing,
+    direction, inspection, onInspect: inspect, letterSpacing: settings.letterSpacing, hyphenation: settings.hyphenation,
     highlightMoves: $<HTMLInputElement>('#changes').checked,
     reservePixels: RESERVE_NATIVE_HEIGHT ? nativeHeights : undefined,
     reserveHeight: RESERVE_NATIVE_HEIGHT ? nativeColumnHeight : undefined,
@@ -488,6 +531,7 @@ for (const id of ['guides', 'changes', 'inspect']) $(`#${id}`).addEventListener(
     // the cached composition instead of paying for another search.
     renderOptimized(optEl, current.paragraphs, paragraphs, baseline, {
       direction, inspection, highlightMoves: checked, onInspect: inspect, letterSpacing: activeRequest?.settings.letterSpacing,
+      hyphenation: activeRequest?.settings.hyphenation,
       reservePixels: RESERVE_NATIVE_HEIGHT ? nativeHeights : undefined,
       reserveHeight: RESERVE_NATIVE_HEIGHT ? nativeColumnHeight : undefined,
     });
@@ -540,6 +584,7 @@ $('#reset').addEventListener('click', () => {
   $('#harmony-note').textContent = 'Joint selection across all paragraphs. Set to zero for independent layouts.';
   $<HTMLInputElement>('#justify').checked = false; beforeJustified = undefined;
   $<HTMLInputElement>('#justify-native').checked = false; baseEl.classList.remove('justify-native');
+  Object.assign(hyphen, hyphenDefaults); syncHyphenControls();
   syncControls(); $<HTMLInputElement>('#protect').checked = true; $<HTMLInputElement>('#ending').disabled = false;
   for (const id of ['guides', 'changes', 'inspect', 'visualizers']) { $<HTMLInputElement>(`#${id}`).checked = false; previews.classList.remove(`show-${id}`); }
   inspection = false; $('#line-inspector').hidden = true; schedule(); toast('Composition settings reset. Your text is unchanged.');
@@ -578,7 +623,7 @@ function snapshotKashida(text: string, count: number, escape: (text: string) => 
 $('#export').addEventListener('click', () => {
   if (!current) return;
   const escape = (text: string) => text.replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${(hasArabic(paragraphs[i]) ? 0 : settings.letterSpacing ?? 0) + l.tracking}em;word-spacing:${l.wordSpacing}em${l.stretch !== 100 ? `;font-stretch:${l.stretch}%` : ''}">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
+  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}.hy::after{content:'-'}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${(hasArabic(paragraphs[i]) ? 0 : settings.letterSpacing ?? 0) + l.tracking}em;word-spacing:${l.wordSpacing}em${l.stretch !== 100 ? `;font-stretch:${l.stretch}%` : ''}">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${l.hyphen ? '<span class="hy"></span>' : wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   const a = document.createElement('a'); a.href = url; a.download = 'unjustified.html'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000); toast('HTML snapshot exported. System-font fallback can change geometry.');

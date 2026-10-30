@@ -2,7 +2,7 @@
 //! `searchLinesJs` in src/optimizer.ts. Every floating-point expression keeps
 //! the JavaScript operand order, so results are bit-identical.
 
-const COLUMNS: usize = 9;
+const COLUMNS: usize = 10;
 const WORD_STIFFNESS: f64 = 10.0;
 const KASHIDA_STIFFNESS: f64 = 0.5;
 const WIDTH_STIFFNESS: f64 = 0.015;
@@ -32,7 +32,7 @@ fn state() -> &'static mut State {
 }
 
 /// Room for `lines` rows of input, column-major: start, end, cost, tracking,
-/// word spacing, kashida, kashida width, stretch, fill.
+/// word spacing, kashida, kashida width, stretch, fill, hyphen.
 #[no_mangle]
 pub extern "C" fn input(lines: usize) -> *mut f64 {
     let s = state();
@@ -56,7 +56,7 @@ impl Table<'_> {
     #[inline] fn start(&self, i: usize) -> usize { self.col(0, i) as usize }
 }
 
-fn transition(t: &Table, a: usize, b: usize, last: bool, r: f64, font_size: f64) -> f64 {
+fn transition(t: &Table, a: usize, b: usize, last: bool, r: f64, font_size: f64, stack: f64) -> f64 {
     let (ws_a, ws_b) = (t.col(4, a), t.col(4, b));
     let (st_a, st_b) = (t.col(7, a), t.col(7, b));
     0.035 * r * sq((t.col(3, a) - t.col(3, b)) / 0.01)
@@ -66,6 +66,7 @@ fn transition(t: &Table, a: usize, b: usize, last: bool, r: f64, font_size: f64)
         } else { 0.0 })
         + (if st_a != st_b { 0.35 * WIDTH_STIFFNESS * r * sq(st_a - st_b) } else { 0.0 })
         + (if last { 0.0 } else { 0.16 * sq((t.col(8, a) - t.col(8, b)) / 0.12) })
+        + (if t.col(9, a) != 0.0 && t.col(9, b) != 0.0 { stack } else { 0.0 })
 }
 
 /// Cost, then insertion order, as one integer: a total order, so the kept set
@@ -125,7 +126,7 @@ fn prune(s: &mut State, t: &Table, paths: &mut Vec<u32>, limit: usize, stride: u
 /// Runs the search over `lines` rows of input; returns how many layouts were
 /// retained. Output, per layout: cost, line count, then that many line ids.
 #[no_mangle]
-pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size: f64) -> usize {
+pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size: f64, stack: f64) -> usize {
     let s = state();
     let input = core::mem::take(&mut s.input);
     let t = Table { n: lines, data: &input[..lines * COLUMNS] };
@@ -153,7 +154,7 @@ pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size
             for &path in &predecessors {
                 let p = path as usize;
                 let previous = s.line[p];
-                let added = if previous < 0 { 0.0 } else { transition(&t, previous as usize, line, last, r, font_size) };
+                let added = if previous < 0 { 0.0 } else { transition(&t, previous as usize, line, last, r, font_size, stack) };
                 let id = s.cost.len() as u32;
                 s.prev.push(path as i32);
                 s.depth.push(s.depth[p] + 1);

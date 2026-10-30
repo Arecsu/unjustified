@@ -16,7 +16,15 @@ interface Case {
   ranges: [string, number][];
   diagnostics?: boolean;
   article?: boolean;
+  /** Custom text typed into the editor. */
+  text?: string;
+  /** Switches to turn on, and selects to set, before the ranges. */
+  checks?: string[];
+  selects?: [string, string][];
+  /** The case must produce hyphenated lines. */
+  hyphens?: boolean;
 }
+const german = 'Die Silbentrennung ist eine alte Kunst der Typografie. Lange Wörter wie Donaudampfschifffahrtsgesellschaft oder Rechtsschutzversicherungsgesellschaften verlangen Aufmerksamkeit, damit der rechte Rand ruhig bleibt.\n\nEin zweiter Absatz zeigt, wie Gemeinschaftsunterkünfte und Verantwortungsbewusstsein in schmalen Spalten getrennt werden.';
 
 const justify: [string, number][] = [['rag', 0], ['firmness', 100], ['word-spacing-min', 25], ['word-spacing-max', 100], ['kashida', 4],
   ['tracking-min', -0.04], ['tracking-max', 0.04], ['sync', 0]];
@@ -31,6 +39,10 @@ const cases: Case[] = [
   { name: 'Japanese with wide tracking and letter-spacing', language: 'ja', ranges: [['letter-spacing', -0.02],
     ['tracking-min', -0.08], ['tracking-max', 0.08], ['rag', 0], ['firmness', 100]] },
   { name: 'Long article nearly justified (helpers + WebAssembly)', ranges: justify, article: true },
+  { name: 'English hyphenation, narrow and frequent', checks: ['hyphenate'], hyphens: true,
+    ranges: [['measure', 260], ['hyphen-frequency', 100], ['rag', 0], ['firmness', 100], ['word-spacing-max', 100]] },
+  { name: 'German custom text with its hyphenation language', text: german, checks: ['hyphenate'],
+    selects: [['hyphen-language', 'de']], hyphens: true, ranges: [['measure', 280], ['hyphen-frequency', 80]] },
 ];
 
 async function settled(page: Page) {
@@ -52,6 +64,14 @@ for (const c of cases) {
     if (c.language) { await page.locator('#language').selectOption(c.language); await settled(page); }
     if (c.typeface) { await page.locator('#typeface').selectOption(c.typeface); await settled(page); }
     if (c.direction) { await page.locator('#direction').selectOption(c.direction); await settled(page); }
+    if (c.text) {
+      await page.locator('#edit-text').click();
+      await page.locator('#text-editor').fill(c.text);
+      await page.locator('#apply-text').click();
+      await settled(page);
+    }
+    for (const id of c.checks ?? []) { await page.locator(`#${id}`).check({ force: true }); await settled(page); }
+    for (const [id, value] of c.selects ?? []) { await page.locator(`#${id}`).selectOption(value); await settled(page); }
     if (c.article) {
       await page.locator('#edit-text').click();
       await page.locator('#text-editor').fill(makeParagraphs(20, 77).join('\n\n'));
@@ -84,15 +104,17 @@ for (const c of cases) {
         if (stretch < 100 - Math.round((s.widthFlex ?? 0) * 100) - 1e-6 || stretch > 100) problems.push(`line ${i}: font-stretch ${stretch}%`);
         const tatweels = [...el.querySelectorAll('.kashida')].reduce((n, k) => n + (k.textContent ?? '').length, 0);
         if (tatweels !== model.kashida) problems.push(`line ${i}: ${tatweels} tatweels drawn, ${model.kashida} modelled`);
+        if (Boolean(el.querySelector('.hyphen')) !== model.hyphen) problems.push(`line ${i}: hyphen drawn ${!model.hyphen}, modelled ${model.hyphen}`);
       });
       return {
-        problems, lines: rendered.length, models: models.length,
+        problems, lines: rendered.length, models: models.length, hyphens: models.filter((l: any) => l.hyphen).length,
         pageOverflow: document.documentElement.scrollWidth > innerWidth,
       };
     });
     expect(report.lines).toBe(report.models);
     expect(report.pageOverflow).toBe(false);
     expect(report.problems).toEqual([]);
+    if (c.hyphens) expect(report.hyphens).toBeGreaterThan(0);
 
     // Copy the whole composed column through the real clipboard.
     const expected = await page.locator('#baseline p').allTextContents();
@@ -106,3 +128,72 @@ for (const c of cases) {
     expect(copied).toBe(expected.join('\n\n'));
   });
 }
+
+// ---------------------------------------------------------------------------
+// Effects with real fonts: each control must improve what it claims to, as
+// measured on the actual composition (not only stay within its bounds).
+
+async function bodyFills(page: Page) {
+  return page.evaluate(() => (window as any).__composition.result.paragraphs
+    .map((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[][]);
+}
+const shortest = (fills: number[][]) => Math.min(...fills.flat());
+
+test('effect: harmony never shortens a paragraph’s lines (the Georgia case)', async ({ page }) => {
+  await page.setViewportSize({ width: 1680, height: 1100 });
+  await page.goto('/');
+  await settled(page);
+  await page.locator('#typeface').selectOption('classic');
+  await settled(page);
+  for (const [id, v] of [['measure', 401], ['letter-spacing', -0.01], ['tracking-min', -0.008], ['tracking-max', 0.008],
+    ['rag', 0], ['firmness', 80], ['word-spacing-min', 50], ['word-spacing-max', 50]] as [string, number][]) await setRange(page, id, v);
+  await setRange(page, 'sync', 0);
+  const independent = await bodyFills(page);
+  await setRange(page, 'sync', 100);
+  const concert = await bodyFills(page);
+  independent.forEach((fills, i) => {
+    if (!fills.length) return;
+    expect(Math.min(...concert[i]), `¶${i + 1}`).toBeGreaterThanOrEqual(Math.min(...fills) - 0.011);
+  });
+});
+
+for (const [name, setup, before, after] of [
+  ['space stretch lengthens the shortest line (Georgia)', { typeface: 'classic' }, [['word-spacing-max', 0]], [['word-spacing-max', 300]]],
+  ['kashida lengthens the shortest Arabic line', { language: 'ar' }, [['kashida', 0]], [['kashida', 4]]],
+] as [string, { typeface?: string; language?: string; hyphenate?: boolean; measure?: number }, [string, number][], [string, number][]][]) {
+  test(`effect: ${name}`, async ({ page }) => {
+    await page.goto('/');
+    await settled(page);
+    if (setup.language) { await page.locator('#language').selectOption(setup.language); await settled(page); }
+    if (setup.typeface) { await page.locator('#typeface').selectOption(setup.typeface); await settled(page); }
+    if (setup.hyphenate) { await page.locator('#hyphenate').check({ force: true }); await settled(page); }
+    if (setup.measure) await setRange(page, 'measure', setup.measure);
+    await setRange(page, 'rag', 0);
+    await setRange(page, 'firmness', 100);
+    for (const [id, v] of before) await setRange(page, id, v);
+    const without = shortest(await bodyFills(page));
+    for (const [id, v] of after) await setRange(page, id, v);
+    const with_ = shortest(await bodyFills(page));
+    expect(with_, `shortest body line ${with_} vs ${without}`).toBeGreaterThan(without);
+  });
+}
+
+test('effect: rare hyphens are rarer, and frequent ones even the edge (Georgia, 260 px)', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await page.locator('#typeface').selectOption('classic');
+  await settled(page);
+  await page.locator('#hyphenate').check({ force: true });
+  await settled(page);
+  for (const [id, v] of [['measure', 260], ['rag', 0], ['firmness', 60]] as [string, number][]) await setRange(page, id, v);
+  const read = () => page.evaluate(() => {
+    const lines = (window as any).__composition.result.paragraphs.flatMap((p: any) => p.lines.slice(0, -1));
+    return { hyphens: lines.filter((l: any) => l.hyphen).length, shortfall: lines.reduce((n: number, l: any) => n + 1 - l.fill, 0) };
+  });
+  await setRange(page, 'hyphen-frequency', 0);
+  const rare = await read();
+  await setRange(page, 'hyphen-frequency', 100);
+  const frequent = await read();
+  expect(rare.hyphens, `rare ${rare.hyphens} vs frequent ${frequent.hyphens}`).toBeLessThan(frequent.hyphens);
+  expect(frequent.shortfall).toBeLessThanOrEqual(rare.shortfall + 1e-9);
+});

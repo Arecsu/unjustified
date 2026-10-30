@@ -17,6 +17,7 @@
  */
 import { trackingAdvances } from './text-metrics';
 import { segmentText, hasArabic } from './language';
+import type { Hyphenation } from './language';
 import { fitMeasure, shareGap } from './stretch';
 import type { Tool } from './stretch';
 import { bestSite, TATWEEL } from './kashida';
@@ -39,6 +40,12 @@ export interface Settings {
   /** Base CSS letter-spacing of the text, in em. Tracking adjusts relative to
    *  it. Arabic paragraphs ignore it. */
   letterSpacing?: number;
+  /** Where words may be hyphenated (from `hyphenationPoints`); absent: never. */
+  hyphenation?: Hyphenation;
+  /** How bad a hyphen is, as the fraction of the measure a line would have to
+   *  fall short to be as bad (0.2: rare, 0.01: frequent). Stacked hyphens
+   *  cost extra. Scaled like evenness, so it keeps its meaning at any firmness. */
+  hyphenPenalty?: number;
   /** 0–4. Most tatweels a line of Arabic may receive. 0 disables kashida. */
   kashida?: number;
   /** 0–0.4. How far lines may condense along the font's width axis. Needs a
@@ -58,6 +65,7 @@ export interface Line {
   kashida: number; // tatweels inserted into this line (Arabic only)
   kashidaWidth: number; // their total advance, px
   stretch: number; // CSS font-stretch, percent (100 = natural)
+  hyphen: boolean; // ends inside a word, with a drawn hyphen
   fill: number;
   overflow: boolean;
 }
@@ -84,6 +92,9 @@ const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(
 const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
 /** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
 const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
+/** Two hyphenated lines in a row cost this many times the hyphen penalty extra. */
+const HYPHEN_STACK = 2;
+const hyphenCost = (s: Settings) => square((s.hyphenPenalty ?? 0) / fillTolerance(s));
 /** How much shorter (fraction of the measure) a body may get for harmony. */
 const HARMONY_SLACK = 0.01;
 /** Weight of the pull toward the full edge for lines inside the rag zone. */
@@ -106,7 +117,8 @@ function lineCost(line: Line, final: boolean, only: boolean, settings: Settings)
   const track = 0.10 * restraint(settings) * square(line.tracking / 0.01)
     + (line.wordSpacing !== 0 ? WORD_STIFFNESS * restraint(settings) * square(line.wordSpacing) : 0)
     + (line.kashida !== 0 ? KASHIDA_STIFFNESS * restraint(settings) * square(line.kashidaWidth / settings.fontSize) : 0)
-    + (line.stretch !== 100 ? WIDTH_STIFFNESS * restraint(settings) * square(100 - line.stretch) : 0);
+    + (line.stretch !== 100 ? WIDTH_STIFFNESS * restraint(settings) * square(100 - line.stretch) : 0)
+    + (line.hyphen ? hyphenCost(settings) : 0);
   if (only) return track;
   if (final) {
     // Short endings are a soft constraint: impossible cases remain renderable.
@@ -130,13 +142,15 @@ function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): 
     + (a.wordSpacing !== b.wordSpacing ? 0.35 * WORD_STIFFNESS * restraint(s) * square(a.wordSpacing - b.wordSpacing) : 0)
     + (a.kashida !== b.kashida ? 0.35 * KASHIDA_STIFFNESS * restraint(s) * square((a.kashidaWidth - b.kashidaWidth) / s.fontSize) : 0)
     + (a.stretch !== b.stretch ? 0.35 * WIDTH_STIFFNESS * restraint(s) * square(a.stretch - b.stretch) : 0)
-    + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12));
+    + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12))
+    + (a.hyphen && b.hyphen ? HYPHEN_STACK * hyphenCost(s) : 0);
 }
 
 /** Build one candidate line from an already-measured natural width. */
 function buildLine(start: number, end: number, text: string, natural: number, advances: number,
   totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceShrink = 0, spaceStretch = 0,
-  kashidaLimit = 0, tatweel = 0, widthLimit = 0, measureAt?: MeasureAt): Line | null {
+  kashidaLimit = 0, tatweel = 0, widthLimit = 0, measureAt?: MeasureAt,
+  hyphen = false, ink = text, wholeWord = end - start === 1): Line | null {
   // CSS tracking contributes a trailing advance too. Japanese uses grapheme
   // advances; connected Arabic paragraphs have their tracking bounds set to zero.
   const naturalFill = natural / s.width;
@@ -162,7 +176,7 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     const target = final ? s.minEnding : below ? 1 - s.rag : 1;
     // Condensing only helps a line that is too long, so only then is it worth
     // the extra measurement at the narrowest step.
-    const narrow = widthLimit && naturalFill > target ? measureAt!(text, 100 - widthLimit) : natural;
+    const narrow = widthLimit && naturalFill > target ? measureAt!(ink, 100 - widthLimit) : natural;
     fit.k = (natural - narrow) / (widthLimit * s.width || 1);
     fit.b = WIDTH_STIFFNESS * restraint(s);
     fit.min = -widthLimit; fit.max = 0;
@@ -196,7 +210,7 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
       // Fitting may condense by a fraction of a step: go to the next whole one,
       // then replace the estimate with the exact width at that step.
       stretch = 100 + Math.floor(amounts[2]);
-      base = measureAt!(text, stretch);
+      base = measureAt!(ink, stretch);
       if (kashidaLimit) tatweelAt = measureAt!(TATWEEL, stretch);
       fit.k = 0;
       kash.k = tatweelAt / s.width;
@@ -211,8 +225,8 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
   const kashidaWidth = kashida * tatweelAt;
   if (kashida !== 0) width += kashidaWidth;
   const overflow = width > s.width + 0.05;
-  if (overflow && end - start > 1) return null;
-  return { start, end, text, natural, width, tracking, wordSpacing, kashida, kashidaWidth, stretch,
+  if (overflow && !wholeWord) return null;
+  return { start, end, text, natural, width, tracking, wordSpacing, kashida, kashidaWidth, stretch, hyphen,
     fill: width / s.width, overflow };
 }
 
@@ -230,22 +244,32 @@ function advancesOf(text: string): number {
 
 /** Greedy reference for tests / non-DOM clients. The UI reads actual browser wraps. */
 export function greedy(text: string, measure: Measure, s: Settings): Layout {
-  const { units: words, separator } = segmentText(text);
+  const { units: words, separator, joins } = segmentText(text, s.hyphenation);
   const total = words.length;
   if (!total) return { lines: [], cost: 0 };
   const lines: Line[] = [];
   const separatorAdvances = separator ? advancesOf(separator) : 0;
+  /** The end of the word starting at `from`: greedy never breaks inside one. */
+  const wordEnd = (from: number) => {
+    let end = from + 1;
+    while (separator && end < total && joins[end - 1] === '') end++;
+    return end;
+  };
   for (let start = 0; start < total;) {
-    let candidate = words[start];
-    let advances = advancesOf(words[start]);
-    let line = buildLine(start, start + 1, candidate, measure(candidate), advances, total, s, false)!;
-    for (let end = start + 2; end <= total; end++) {
-      const word = words[end - 1];
+    let end = wordEnd(start);
+    let candidate = words.slice(start, end).join('');
+    let advances = advancesOf(candidate);
+    let line = buildLine(start, end, candidate, measure(candidate), advances, total, s, false,
+      0, 0, 0, 0, 0, 0, undefined, false, candidate, true)!;
+    while (end < total) {
+      const next = wordEnd(end);
+      const word = words.slice(end, next).join('');
       candidate = candidate + separator + word;
       advances += advancesOf(word) + separatorAdvances;
-      const next = buildLine(start, end, candidate, measure(candidate), advances, total, s, false);
-      if (!next) break;
-      line = next;
+      const built = buildLine(start, next, candidate, measure(candidate), advances, total, s, false);
+      if (!built) break;
+      line = built;
+      end = next;
     }
     lines.push(line);
     start = line.end;
@@ -378,35 +402,38 @@ function diversity(paths: number[], count: number, limit: number, pool: PathPool
 /** A paragraph's candidate lines as columns: what the search reads. */
 export interface LineColumns {
   start: Int32Array; end: Int32Array; cost: Float64Array; tracking: Float64Array; wordSpacing: Float64Array;
-  kashida: Float64Array; kashidaWidth: Float64Array; stretch: Float64Array; fill: Float64Array;
+  kashida: Float64Array; kashidaWidth: Float64Array; stretch: Float64Array; fill: Float64Array; hyphen: Float64Array;
 }
 function lineColumns(table: Line[], costs: number[]): LineColumns {
   const n = table.length;
   const columns: LineColumns = {
     start: new Int32Array(n), end: new Int32Array(n), cost: Float64Array.from(costs), tracking: new Float64Array(n),
     wordSpacing: new Float64Array(n), kashida: new Float64Array(n), kashidaWidth: new Float64Array(n),
-    stretch: new Float64Array(n), fill: new Float64Array(n),
+    stretch: new Float64Array(n), fill: new Float64Array(n), hyphen: new Float64Array(n),
   };
   table.forEach((l, i) => {
     columns.start[i] = l.start; columns.end[i] = l.end; columns.tracking[i] = l.tracking;
     columns.wordSpacing[i] = l.wordSpacing; columns.kashida[i] = l.kashida; columns.kashidaWidth[i] = l.kashidaWidth;
-    columns.stretch[i] = l.stretch; columns.fill[i] = l.fill;
+    columns.stretch[i] = l.stretch; columns.fill[i] = l.fill; columns.hyphen[i] = l.hyphen ? 1 : 0;
   });
   return columns;
 }
 
 /** `transition` over line ids. */
-function transitionAt(t: LineColumns, a: number, b: number, final: boolean, r: number, fontSize: number): number {
+function transitionAt(t: LineColumns, a: number, b: number, final: boolean, r: number, fontSize: number,
+  stack: number): number {
   return 0.035 * r * square((t.tracking[a] - t.tracking[b]) / 0.01)
     + (t.wordSpacing[a] !== t.wordSpacing[b] ? 0.35 * WORD_STIFFNESS * r * square(t.wordSpacing[a] - t.wordSpacing[b]) : 0)
     + (t.kashida[a] !== t.kashida[b] ? 0.35 * KASHIDA_STIFFNESS * r * square((t.kashidaWidth[a] - t.kashidaWidth[b]) / fontSize) : 0)
     + (t.stretch[a] !== t.stretch[b] ? 0.35 * WIDTH_STIFFNESS * r * square(t.stretch[a] - t.stretch[b]) : 0)
-    + (final ? 0 : 0.16 * square((t.fill[a] - t.fill[b]) / 0.12));
+    + (final ? 0 : 0.16 * square((t.fill[a] - t.fill[b]) / 0.12))
+    + (t.hyphen[a] && t.hyphen[b] ? stack : 0);
 }
 
 export interface SearchResult { retained: { ids: number[]; cost: number }[]; explored: number }
 /** A faster implementation of `searchLines` (WebAssembly), when one is loaded. */
-let kernel: ((t: LineColumns, total: number, beam: number, restraint: number, fontSize: number) => SearchResult) | undefined;
+let kernel: ((t: LineColumns, total: number, beam: number, restraint: number, fontSize: number,
+  stack: number) => SearchResult) | undefined;
 /** The document stage in WebAssembly: chosen layout index per paragraph, and
  *  how many combinations were scored. */
 type JointKernel = (counts: Int32Array, costs: Float64Array, kinds: Uint8Array, features: Float64Array,
@@ -416,11 +443,13 @@ export function setSearchKernel(next: typeof kernel, joint?: JointKernel) { kern
 
 /** Beam search over a line table, lines grouped by start in increasing order. */
 export function searchLines(t: LineColumns, total: number, beam: number, s: Settings): SearchResult {
-  if (kernel) return kernel(t, total, beam, restraint(s), s.fontSize);
-  return searchLinesJs(t, total, beam, restraint(s), s.fontSize);
+  const stack = HYPHEN_STACK * hyphenCost(s);
+  if (kernel) return kernel(t, total, beam, restraint(s), s.fontSize, stack);
+  return searchLinesJs(t, total, beam, restraint(s), s.fontSize, stack);
 }
 
-export function searchLinesJs(t: LineColumns, total: number, beam: number, r: number, fontSize: number): SearchResult {
+export function searchLinesJs(t: LineColumns, total: number, beam: number, r: number, fontSize: number,
+  stack = 0): SearchResult {
   const paths: number[][] = Array.from({ length: total + 1 }, () => []);
   const pool = new PathPool(1024 + beam * 24);
   pool.reset();
@@ -442,7 +471,7 @@ export function searchLinesJs(t: LineColumns, total: number, beam: number, r: nu
         const path = predecessors[i];
         const previous = pool.line[path];
         bucket.push(pool.push(path, pool.cost[path] + t.cost[line]
-          + (previous < 0 ? 0 : transitionAt(t, previous, line, final, r, fontSize)), line));
+          + (previous < 0 ? 0 : transitionAt(t, previous, line, final, r, fontSize, stack)), line));
         explored++;
       }
       // Bound transient memory on long paragraphs.
@@ -471,7 +500,7 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
     measure = value => plain(value) + advancesOf(value) * base * s.fontSize;
     if (plainAt) measureAt = (value, stretch) => plainAt(value, stretch) + advancesOf(value) * base * s.fontSize;
   }
-  const { units: words, separator } = segmentText(text);
+  const { units: words, separator, joins } = segmentText(text, s.hyphenation);
   const total = words.length;
   if (!total) return { layouts: [{ lines: [], cost: 0 }], explored: 0 };
   const separatorAdvances = separator ? advancesOf(separator) : 0;
@@ -509,19 +538,27 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
     let candidate = '';
     let advances = 0;
     let estimate = 0;
+    let spaces = 0;
     for (let end = start + 1; end <= total; end++) {
       const index = end - 1;
       if (end === start + 1) {
         candidate = words[index];
         advances = unitAdvances[index];
         estimate = unitWidths[index];
-      } else {
+      } else if (joins[index - 1]) {
         candidate = candidate + separator + words[index];
         advances += unitAdvances[index] + separatorAdvances;
         estimate += unitWidths[index] + spaceWidth;
+        spaces++;
+      } else {
+        // Inside a hyphenated word: no space between the pieces.
+        candidate = candidate + words[index];
+        advances += unitAdvances[index];
+        estimate += unitWidths[index];
       }
       const final = end === total;
-      const spaces = separator ? end - start - 1 : 0;
+      // A line may end inside a word only at a hyphenation point, with a hyphen.
+      const hyphen = !final && separator !== '' && joins[index] === '';
       // Tracking and word spacing can move a line's width: allow for the full bounded amount.
       const trackingPx = advances * s.fontSize;
       const shrinkPx = spaceShrink > 0 ? spaceShrink * spaces * s.fontSize : 0;
@@ -539,8 +576,11 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         // Cannot reach the 0.50 fill floor that the search requires.
         continue;
       }
-      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceShrink, spaceStretch,
-        lineKashida, tatweel, widthLimit, measureAt);
+      const ink = hyphen ? candidate + '-' : candidate;
+      const wholeWord = separator ? spaces === 0 && (start === 0 || joins[start - 1] !== '') && !hyphen : end - start === 1;
+      const line = buildLine(start, end, candidate, hyphen ? measure(ink) : measure(candidate),
+        hyphen ? advances + 1 : advances, total, s, true, spaces, spaceShrink, spaceStretch,
+        lineKashida, tatweel, widthLimit, measureAt, hyphen, ink, wholeWord);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       table.push(line);
