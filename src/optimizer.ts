@@ -244,19 +244,19 @@ class PathPool {
   prev: Int32Array;
   depth: Int32Array;
   cost: Float64Array;
-  line: (Line | null)[];
+  line: Int32Array; // line id in the paragraph's line table, -1 for the root
   size = 0;
   constructor(capacity: number) {
     this.prev = new Int32Array(capacity);
     this.depth = new Int32Array(capacity);
     this.cost = new Float64Array(capacity);
-    this.line = new Array(capacity).fill(null);
+    this.line = new Int32Array(capacity);
   }
   reset() {
     this.size = 0;
-    this.push(-1, 0, null);
+    this.push(-1, 0, -1);
   }
-  push(prev: number, cost: number, line: Line | null): number {
+  push(prev: number, cost: number, line: number): number {
     if (this.size === this.prev.length) this.grow();
     const id = this.size++;
     this.prev[id] = prev;
@@ -270,17 +270,9 @@ class PathPool {
     const prev = new Int32Array(capacity); prev.set(this.prev);
     const depth = new Int32Array(capacity); depth.set(this.depth);
     const cost = new Float64Array(capacity); cost.set(this.cost);
-    const line = this.line.slice(); line.length = capacity;
+    const line = new Int32Array(capacity); line.set(this.line);
     this.prev = prev; this.depth = depth; this.cost = cost; this.line = line;
   }
-}
-
-function materialize(pool: PathPool, id: number): Layout {
-  const lines: Line[] = new Array(pool.depth[id]);
-  for (let node = id, i = lines.length - 1; node >= 0; node = pool.prev[node], i--) {
-    if (i >= 0) lines[i] = pool.line[node]!;
-  }
-  return { lines, cost: pool.cost[id] };
 }
 
 /** Rank order for pruning: cost, then insertion order (pool ids increase
@@ -326,34 +318,114 @@ function selectCheapest(paths: number[], k: number, cost: Float64Array) {
 }
 
 /** Cost order, then keep a bounded, end-shape-diverse subset. */
-function prune(paths: number[], limit: number, pool: PathPool, bins: Int32Array, stride: number): number[] {
+function prune(paths: number[], limit: number, pool: PathPool, bins: Int32Array, stride: number,
+  starts: Int32Array): number[] {
   if (paths.length === 0) return paths;
   // Only the cheapest `limit * 4` entries can matter: a bin holds at most four.
   const prefix = Math.min(paths.length, limit * 4);
   selectCheapest(paths, prefix, pool.cost);
-  let kept = diversity(paths, prefix, limit, pool, bins, stride);
+  let kept = diversity(paths, prefix, limit, pool, bins, stride, starts);
   if (kept.length < limit && prefix < paths.length) {
     // A saturated bin can force the search deeper; sort fully so the kept set is
     // exactly what a full sort would produce.
     selectCheapest(paths, paths.length, pool.cost);
-    kept = diversity(paths, paths.length, limit, pool, bins, stride);
+    kept = diversity(paths, paths.length, limit, pool, bins, stride, starts);
   }
   return kept;
 }
 
 function diversity(paths: number[], count: number, limit: number, pool: PathPool,
-  bins: Int32Array, stride: number): number[] {
+  bins: Int32Array, stride: number, starts: Int32Array): number[] {
   bins.fill(-1, 0, bins.length);
   const kept: number[] = [];
   for (let i = 0; i < count; i++) {
     const id = paths[i];
-    const key = pool.depth[id] * stride + pool.line[id]!.start;
+    const key = pool.depth[id] * stride + starts[pool.line[id]];
     const seen = bins[key] < 0 ? 0 : bins[key];
     bins[key] = seen + 1;
     if (seen < 4) kept.push(id);
     if (kept.length >= limit) break;
   }
   return kept;
+}
+
+/** A paragraph's candidate lines as columns: what the search reads. */
+export interface LineColumns {
+  start: Int32Array; end: Int32Array; cost: Float64Array; tracking: Float64Array; wordSpacing: Float64Array;
+  kashida: Float64Array; kashidaWidth: Float64Array; stretch: Float64Array; fill: Float64Array;
+}
+function lineColumns(table: Line[], costs: number[]): LineColumns {
+  const n = table.length;
+  const columns: LineColumns = {
+    start: new Int32Array(n), end: new Int32Array(n), cost: Float64Array.from(costs), tracking: new Float64Array(n),
+    wordSpacing: new Float64Array(n), kashida: new Float64Array(n), kashidaWidth: new Float64Array(n),
+    stretch: new Float64Array(n), fill: new Float64Array(n),
+  };
+  table.forEach((l, i) => {
+    columns.start[i] = l.start; columns.end[i] = l.end; columns.tracking[i] = l.tracking;
+    columns.wordSpacing[i] = l.wordSpacing; columns.kashida[i] = l.kashida; columns.kashidaWidth[i] = l.kashidaWidth;
+    columns.stretch[i] = l.stretch; columns.fill[i] = l.fill;
+  });
+  return columns;
+}
+
+/** `transition` over line ids. */
+function transitionAt(t: LineColumns, a: number, b: number, final: boolean, r: number, fontSize: number): number {
+  return 0.035 * r * square((t.tracking[a] - t.tracking[b]) / 0.01)
+    + (t.wordSpacing[a] !== t.wordSpacing[b] ? 0.35 * WORD_STIFFNESS * r * square(t.wordSpacing[a] - t.wordSpacing[b]) : 0)
+    + (t.kashida[a] !== t.kashida[b] ? 0.35 * KASHIDA_STIFFNESS * r * square((t.kashidaWidth[a] - t.kashidaWidth[b]) / fontSize) : 0)
+    + (t.stretch[a] !== t.stretch[b] ? 0.35 * WIDTH_STIFFNESS * r * square(t.stretch[a] - t.stretch[b]) : 0)
+    + (final ? 0 : 0.16 * square((t.fill[a] - t.fill[b]) / 0.12));
+}
+
+export interface SearchResult { retained: { ids: number[]; cost: number }[]; explored: number }
+/** A faster implementation of `searchLines` (WebAssembly), when one is loaded. */
+let kernel: ((t: LineColumns, total: number, beam: number, restraint: number, fontSize: number) => SearchResult) | undefined;
+export function setSearchKernel(next: typeof kernel) { kernel = next; }
+
+/** Beam search over a line table, lines grouped by start in increasing order. */
+export function searchLines(t: LineColumns, total: number, beam: number, s: Settings): SearchResult {
+  if (kernel) return kernel(t, total, beam, restraint(s), s.fontSize);
+  return searchLinesJs(t, total, beam, restraint(s), s.fontSize);
+}
+
+export function searchLinesJs(t: LineColumns, total: number, beam: number, r: number, fontSize: number): SearchResult {
+  const paths: number[][] = Array.from({ length: total + 1 }, () => []);
+  const pool = new PathPool(1024 + beam * 24);
+  pool.reset();
+  paths[0] = [0];
+  // Flat bin counters, reset per prune without allocating or hashing.
+  const stride = total + 1;
+  const bins = new Int32Array((total + 2) * stride).fill(-1);
+  const starts = t.start;
+  let explored = 0;
+  let line = 0;
+  for (let start = 0; start < total; start++) {
+    if (start > 0) paths[start] = prune(paths[start], beam, pool, bins, stride, starts);
+    const predecessors = paths[start];
+    for (; line < starts.length && starts[line] === start; line++) {
+      const end = t.end[line];
+      const final = end === total;
+      const bucket = paths[end];
+      for (let i = 0; i < predecessors.length; i++) {
+        const path = predecessors[i];
+        const previous = pool.line[path];
+        bucket.push(pool.push(path, pool.cost[path] + t.cost[line]
+          + (previous < 0 ? 0 : transitionAt(t, previous, line, final, r, fontSize)), line));
+        explored++;
+      }
+      // Bound transient memory on long paragraphs.
+      if (bucket.length > beam * 20) paths[end] = prune(bucket, beam * 2, pool, bins, stride, starts);
+    }
+    // Paths before this word will never be used again.
+    paths[start] = [];
+  }
+  const retained = prune(paths[total], beam, pool, bins, stride, starts).map(id => {
+    const ids: number[] = new Array(pool.depth[id]);
+    for (let node = id, i = ids.length - 1; i >= 0; node = pool.prev[node], i--) ids[i] = pool.line[node];
+    return { ids, cost: pool.cost[id] };
+  });
+  return { retained, explored };
 }
 
 export function paragraphCandidates(text: string, measure: Measure, s: Settings,
@@ -386,18 +458,15 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   const sitePrefix = new Int32Array(total + 1);
   if (kashidaLimit) for (let i = 0; i < total; i++) sitePrefix[i + 1] = sitePrefix[i] + (bestSite(words[i]) ? 1 : 0);
 
-  const paths: number[][] = Array.from({ length: total + 1 }, () => []);
-  const pool = new PathPool(1024 + beam * 24);
-  pool.reset();
-  paths[0] = [0];
-  // Flat bin counters, reset per prune without allocating or hashing.
-  const stride = total + 1;
-  const bins = new Int32Array((total + 2) * stride).fill(-1);
-  let explored = 0;
+  // Stage 1: every line that can start where some line ends. Which lines exist
+  // depends only on their start, never on the path that reached it, so this
+  // runs before the search, and the search sees only numbers.
+  const table: Line[] = [];
+  const costs: number[] = [];
+  const reachable = new Uint8Array(total + 1);
+  reachable[0] = 1;
   for (let start = 0; start < total; start++) {
-    if (start > 0) paths[start] = prune(paths[start], beam, pool, bins, stride);
-    const predecessors = paths[start];
-    if (!predecessors.length) continue;
+    if (!reachable[start]) continue;
     let candidate = '';
     let advances = 0;
     let estimate = 0;
@@ -434,22 +503,14 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         lineKashida, tatweel, widthLimit, measureAt);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
-      const cost = lineCost(line, final, start === 0 && final, s);
-      const bucket = paths[end];
-      for (let i = 0; i < predecessors.length; i++) {
-        const path = predecessors[i];
-        bucket.push(pool.push(path, pool.cost[path] + cost
-          + transition(pool.line[path] ?? undefined, line, final, s), line));
-        explored++;
-      }
-      // Bound transient memory on long paragraphs.
-      if (bucket.length > beam * 20) paths[end] = prune(bucket, beam * 2, pool, bins, stride);
+      table.push(line);
+      costs.push(lineCost(line, final, start === 0 && final, s));
+      reachable[end] = 1;
     }
-    // Paths before this word will never be used again.
-    paths[start] = [];
   }
-  const retained = prune(paths[total], beam, pool, bins, stride);
-  const layouts = retained.map(id => materialize(pool, id));
+  // Stage 2: the beam search over that table.
+  const { retained, explored } = searchLines(lineColumns(table, costs), total, beam, s);
+  const layouts = retained.map(({ ids, cost }) => ({ lines: ids.map(id => table[id]), cost }));
   // Retain the exact untracked greedy reference as a valid fallback candidate.
   layouts.push(greedy(text, measure, s));
   return { layouts: layouts.sort((a, b) => a.cost - b.cost), explored };
