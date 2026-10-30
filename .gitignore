@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+test-results/
+playwright-report/
+.pi/
+.env
+.env.*
+!.env.example
+research/*.pdf
+research/*.txt
+wasm/target/
