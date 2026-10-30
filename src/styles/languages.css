@@ -5,6 +5,8 @@
 .reading-column .cursive-text { font-variant-ligatures: normal; letter-spacing: 0; }
 /* Optional comparison: the browser's own justification on column A. */
 .reading-column.justify-native p { text-align: justify; }
+/* With hyphenation on, A shows the browser's own hyphenation for comparison. */
+.reading-column.hyphenate-native p { hyphens: auto; -webkit-hyphens: auto; }
 .reading-column p[dir="rtl"] .line-guide { left: 0; right: var(--line-width); }
 .reading-column p[dir="rtl"] .line-guide:before { left: auto; right: -.125rem; }
 .reading-column p[dir="rtl"] .composed-line::before { left: 0; right: var(--line-width); }

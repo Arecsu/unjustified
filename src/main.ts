@@ -115,8 +115,27 @@ function syncHyphenControls() {
   }
 }
 for (const [value, label] of hyphenationLanguages) $('#hyphen-language').append(new Option(label, value));
-$('#hyphenate').addEventListener('change', e => { hyphen.enabled = (e.target as HTMLInputElement).checked; schedule(false); });
-$('#hyphen-language').addEventListener('change', e => { hyphen.language = (e.target as HTMLSelectElement).value; schedule(false); });
+/** Column A compares against the browser's own `hyphens: auto`, in the same
+ *  language. B is hyphenated by the optimizer, never by CSS. */
+function applyNativeHyphenation() {
+  const language = hyphen.enabled ? hyphenLanguage() : undefined;
+  baseEl.classList.toggle('hyphenate-native', Boolean(language));
+  const tag = language === 'el-monoton' ? 'el' : language?.replace(/^(\w+)-(\w+)$/, (_, a: string, b: string) => `${a}-${b.toUpperCase()}`);
+  baseEl.querySelectorAll('p').forEach((p, i) => {
+    const text = paragraphs[i] ?? '';
+    p.lang = tag && !hasArabic(text) && !hasJapanese(text) ? tag : detectLanguage(text);
+  });
+}
+$('#hyphenate').addEventListener('change', e => {
+  hyphen.enabled = (e.target as HTMLInputElement).checked;
+  applyNativeHyphenation();
+  schedule(false);
+});
+$('#hyphen-language').addEventListener('change', e => {
+  hyphen.language = (e.target as HTMLSelectElement).value;
+  applyNativeHyphenation();
+  schedule(false);
+});
 for (const [id, key] of Object.entries(hyphenControls)) $(`#${id}`).addEventListener('input', () => {
   hyphen[key] = Number($<HTMLInputElement>(`#${id}`).value);
   syncHyphenControls();
@@ -132,7 +151,7 @@ function updateScriptUI() {
   $<HTMLInputElement>('#hyphenate').disabled = noHyphens;
   $('#hyphen-note').textContent = noHyphens
     ? 'Arabic and Japanese are not hyphenated: kashida and tracking do that work.'
-    : 'Breaks words at dictionary hyphenation points. Auto uses English for Latin-script text; choose the language for other texts. Copying rejoins hyphenated words.';
+    : 'Breaks words at dictionary hyphenation points. Auto uses English for Latin-script text; choose the language for other texts. Copying rejoins hyphenated words. Column A shows the browser’s own hyphenation for comparison.';
   const anyArabic = paragraphs.some(hasArabic);
   $<HTMLInputElement>('#kashida').disabled = !anyArabic;
   $('#kashida-note').textContent = anyArabic
@@ -174,6 +193,7 @@ function refreshCanvas() {
     });
     parent.replaceChildren(fragment);
   }
+  applyNativeHyphenation();
   // New content invalidates the reserved height; the next render sets it again.
   optEl.style.removeProperty('min-height');
 }
@@ -584,7 +604,7 @@ $('#reset').addEventListener('click', () => {
   $('#harmony-note').textContent = 'Joint selection across all paragraphs. Set to zero for independent layouts.';
   $<HTMLInputElement>('#justify').checked = false; beforeJustified = undefined;
   $<HTMLInputElement>('#justify-native').checked = false; baseEl.classList.remove('justify-native');
-  Object.assign(hyphen, hyphenDefaults); syncHyphenControls();
+  Object.assign(hyphen, hyphenDefaults); syncHyphenControls(); applyNativeHyphenation();
   syncControls(); $<HTMLInputElement>('#protect').checked = true; $<HTMLInputElement>('#ending').disabled = false;
   for (const id of ['guides', 'changes', 'inspect', 'visualizers']) { $<HTMLInputElement>(`#${id}`).checked = false; previews.classList.remove(`show-${id}`); }
   inspection = false; $('#line-inspector').hidden = true; schedule(); toast('Composition settings reset. Your text is unchanged.');

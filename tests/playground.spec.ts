@@ -541,3 +541,22 @@ test('column A can show the browser’s own justification for comparison', async
   await settled(page);
   await expect(page.locator('#baseline p').first()).not.toHaveCSS('text-align', 'justify');
 });
+
+test('hyphenation also turns on the browser’s own hyphenation in column A, in the same language', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  const a = page.locator('#baseline p').first(), b = page.locator('#optimized p').first();
+  await expect(a).not.toHaveCSS('hyphens', 'auto');
+  await page.locator('#hyphenate').check({ force: true });
+  await settled(page);
+  await expect(a).toHaveCSS('hyphens', 'auto');
+  await expect(a).toHaveAttribute('lang', 'en-US');
+  await expect(b).not.toHaveCSS('hyphens', 'auto');
+  await page.locator('#hyphen-language').selectOption('de');
+  await settled(page);
+  await expect(a).toHaveAttribute('lang', 'de');
+  await page.locator('#hyphenate').uncheck({ force: true });
+  await settled(page);
+  await expect(a).not.toHaveCSS('hyphens', 'auto');
+  await expect(a).toHaveAttribute('lang', 'en');
+});
