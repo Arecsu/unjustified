@@ -4,6 +4,7 @@ import robotoCss from '@fontsource-variable/roboto-flex/wdth.css?inline';
 import japaneseCss from '@fontsource-variable/noto-sans-jp/index.css?inline';
 import arabicCss from '@fontsource-variable/noto-sans-arabic/wdth.css?inline';
 import { hasArabic, hasJapanese } from './language';
+import { parseRange } from './unicode-range';
 import type { Language } from './language';
 
 export type Typeface = 'serif' | 'sans' | 'classic' | 'roboto' | 'japanese' | 'arabic';
@@ -37,10 +38,7 @@ function facesFor(key: keyof typeof css): Face[] {
     const weight = /font-weight:\s*([^;]+)/.exec(body)![1];
     const stretch = /font-stretch:\s*([^;]+)/.exec(body)?.[1].trim() ?? '';
     const range = /unicode-range:\s*([^;]+)/.exec(body)![1];
-    const intervals = range.split(',').map(part => {
-      const [a, b] = part.trim().slice(2).split('-');
-      return [parseInt(a, 16), parseInt(b ?? a, 16)];
-    });
+    const intervals = range.split(',').map(part => parseRange(part.trim()));
     return { family, url, weight, stretch, range, intervals };
   });
   definitions.set(key, faces);
