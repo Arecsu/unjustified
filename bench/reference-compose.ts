@@ -25,7 +25,8 @@ function lineCost(line: Line, final: boolean, only: boolean, settings: Settings)
       ? 240 * square(shortage) + (line.end - line.start === 1 ? 18 : 0)
       : 0);
   }
-  return 1.4 + square((line.fill - (1 - settings.rag)) / 0.10) + track
+  const short = 1 - settings.rag - line.fill;
+  return 1.4 + (short > 0 ? square(short / 0.10) : 0) + 0.15 * square((1 - line.fill) / 0.10) + track
     + 80 * square(Math.max(0, 0.68 - line.fill));
 }
 
@@ -46,8 +47,9 @@ function createLine(words: string[], start: number, end: number, measure: Measur
   const only = start === 0 && final;
   let tracking = 0;
   if (tracked && (s.trackingMin < 0 || s.trackingMax > 0) && !only) {
-    const target = final ? s.minEnding : 1 - s.rag;
-    const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
+    const below = naturalFill < 1 - s.rag;
+    const target = final ? s.minEnding : below ? 1 - s.rag : 1;
+    const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : below ? 100 : 100 * 0.15;
     const b = 1000;
     tracking = clamp(a * coefficient * (target - naturalFill)
       / (a * coefficient * coefficient + b), s.trackingMin, s.trackingMax);

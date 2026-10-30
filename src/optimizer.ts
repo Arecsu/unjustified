@@ -80,6 +80,8 @@ const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(
 const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
 /** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
 const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
+/** Weight of the pull toward the full edge for lines inside the rag zone. */
+const ZONE_PULL = 0.15;
 /** Tool stiffness, loosest to stiffest per unit of fill: word spacing (em²),
  *  kashida (em² of tatweel), width (percentage point²), tracking (em²). */
 const WORD_STIFFNESS = 10;
@@ -107,7 +109,11 @@ function lineCost(line: Line, final: boolean, only: boolean, settings: Settings)
       ? 240 * square(shortage) + (line.end - line.start === 1 ? 18 : 0)
       : 0);
   }
-  return 1.4 + square((line.fill - (1 - settings.rag)) / fillTolerance(settings)) + track
+  // The rag is a zone: a line may end anywhere in the last `rag` of the measure.
+  // Ending before the zone is penalized; inside it, a light pull to the edge.
+  const tolerance = fillTolerance(settings);
+  const short = 1 - settings.rag - line.fill;
+  return 1.4 + (short > 0 ? square(short / tolerance) : 0) + ZONE_PULL * square((1 - line.fill) / tolerance) + track
     + 80 * square(Math.max(0, 0.68 - line.fill));
 }
 
@@ -145,14 +151,16 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     track.k = advances * s.fontSize / s.width;
     track.b = TRACKING_STIFFNESS * restraint(s);
     track.min = s.trackingMin; track.max = s.trackingMax;
-    const target = final ? s.minEnding : 1 - s.rag;
+    // Below the rag zone, aim for its start; inside it, the light pull to the edge.
+    const below = naturalFill < 1 - s.rag;
+    const target = final ? s.minEnding : below ? 1 - s.rag : 1;
     // Condensing only helps a line that is too long, so only then is it worth
     // the extra measurement at the narrowest step.
     const narrow = widthLimit && naturalFill > target ? measureAt!(text, 100 - widthLimit) : natural;
     fit.k = (natural - narrow) / (widthLimit * s.width || 1);
     fit.b = WIDTH_STIFFNESS * restraint(s);
     fit.min = -widthLimit; fit.max = 0;
-    const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
+    const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : below ? 100 : 100 * ZONE_PULL;
     shareGap(target - naturalFill, a, tools, amounts);
     // Tatweels are whole glyphs and widths whole steps: round, pin, and let the
     // other tools absorb the rest.
