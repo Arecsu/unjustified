@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Round 3 — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><b>unjustified</b><span class="muted">lab</span><a class="hl" href="./index.html" aria-label="Round 3 notes">↙</a></div>
+  <nav class="modes">
+    <span class="seg">
+      <button class="hl" data-layout-set="left" title="Text on the left margin">left</button>
+      <span class="muted">/</span>
+      <button class="hl" data-layout-set="centre" title="Text in the middle">centre</button>
+    </span>
+    <span class="seg">
+      <span class="muted">hold</span>
+      <button class="hl" data-peek="ragged" aria-pressed="true" title="Hold to see the browser's own ragged text in place of yours">ragged</button>
+      <span class="muted">/</span>
+      <button class="hl" data-peek="justified" aria-pressed="false" title="Hold to see the browser's own justified text in place of yours">justified</button>
+    </span>
+    <span class="seg">
+      <button class="hl" data-compare aria-pressed="false" title="The browser's text beside yours"><span class="wide">side by side</span><span class="narrow">both</span></button>
+      <span class="muted">/</span>
+      <button class="hl" data-focus aria-pressed="false" title="Fade everything but the text (Esc)">focus</button>
+      <span class="muted">/</span>
+      <button class="hl" data-read title="Only the text, as a post would show it">read</button>
+    </span>
+  </nav>
+</header>
+<main id="canvas"><div class="stage"></div></main>
+<footer class="status num">
+  <span data-status="count"></span>
+  <span data-status="setup"></span>
+</footer>
+<aside class="panel">
+  <div class="groups"></div>
+  <div class="tabs" role="tablist"></div>
+</aside>
+<button class="exit hl" data-read title="Back to the lab (Esc)" aria-label="Back to the lab">↙</button>
+<script type="module">
+  import { start } from './proto.js';
+  start();
+</script>
+</body>
+</html>

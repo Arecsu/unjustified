@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab round 3 — unjustified</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { display: block; height: auto; padding: 1.25rem var(--margin) 4rem; max-width: 60rem; }
+  h1 { font-weight: 500; font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: -.02em; line-height: 1.05; margin: 3rem 0 2rem; font-variation-settings: 'opsz' 32; }
+  ol { list-style: none; padding: 0; margin: 0; border-top: var(--rule); }
+  ol li { border-bottom: var(--rule); }
+  ol a { display: grid; grid-template-columns: 3rem 11rem 1fr; gap: 1rem; padding: 1rem 0; align-items: baseline; }
+  @media (hover: hover) { ol a:hover { background: var(--fg); color: var(--bg); } }
+  ol b { font-weight: 500; font-size: 1.5rem; }
+  h2 { font: inherit; text-transform: uppercase; font-size: .8125rem; margin: 3rem 0 .75rem; }
+  ul { margin: 0; padding-left: 1.1rem; line-height: 1.6; color: var(--fg-2); }
+  ul b { font-weight: 500; color: var(--fg); }
+  @media (max-width: 40em) { ol a { grid-template-columns: 2.5rem 1fr; } ol a span:last-child { grid-column: 2; } }
+</style>
+</head>
+<body>
+<div class="brand"><b>unjustified</b><span class="muted">lab · round 3</span><a class="hl" href="../index.html">↙</a></div>
+<h1>Unjustified first. Four ways to spend the width.</h1>
+<p class="muted">One page, round 2's A2 with round 1 A's controls. The four differ only in where the text sits and what fills the spare width.</p>
+<ol>
+  <li><a href="./lab.html?layout=left"><span class="num">L</span><b>Left</b><span>A2 as it was: text on the left margin, spare width stays empty.</span></a></li>
+  <li><a href="./lab.html?layout=centre"><span class="num">C</span><b>Centred</b><span>The column sits in the middle of the canvas.</span></a></li>
+  <li><a href="./lab.html?layout=gutter"><span class="num">G</span><b>Gutter</b><span>malejandro.com's own grid. Lines, Σ, short and width live in the label gutter, right-aligned like WEB / ROLE / TIMELINE.</span></a></li>
+  <li><a href="./lab.html?layout=wide"><span class="num">W</span><b>Wide panel</b><span>On wide screens the panel takes the spare width and shows every group at once, in two columns.</span></a></li>
+</ol>
+
+<h2>From your notes</h2>
+<ul>
+  <li><b>Unjustified alone</b> by default. Hold <b>ragged</b> or <b>justified</b> in the header to see the browser's own text in its place until you let go. <b>side by side</b> puts the browser's column beside yours, as whichever of the two you pressed last. No A / B / A+B.</li>
+  <li><b>Auto width</b> by default: the column follows the window, up to 70 ch (<i>Auto up to</i>, under Type's more). Dragging the slider or the handle fixes it; <b>auto</b> or a double-click on the handle brings it back.</li>
+  <li><b>Always editable.</b> Click into the text and type. Comparing, both columns share one text.</li>
+  <li><b>read</b>: only the text, on the site's content column, like a post. <b>↙</b> or Esc to come back.</li>
+  <li><b>Simple first.</b> Each group shows its basics; <b>n more ↓</b> opens the rest and says how many of those you've changed.</li>
+  <li><b>Reset by gesture:</b> double-click or double-tap a slider or its label. A tick on the track marks the default; the thumb covers it, so it shows only once you've moved away, and dragging near it snaps back.</li>
+  <li><b>Linked pairs keep their ratio</b>, like a locked aspect ratio. Tracking starts ±0.012 em; word spacing's slider moves only the stretch (+200%); the shrink stays at −20% unless you split it. Unlinked, the row stays as a heading over two indented rows, Shrink and Stretch, so nothing jumps. Relinking keeps the ratio you set.</li>
+  <li><b>Strike toggles</b> from specimen T-04 for <b>auto</b> and <b>linked</b>: off is struck through and faded, the strike in full ink.</li>
+  <li>Header: <b>left / centre</b> switch in place. <b>focus</b> fades everything but the text and itself, without moving anything (Esc too); <b>read</b> rebuilds the page around the text.</li>
+  <li><b>Kashida</b> is a group of its own, laid out like Hyphens: on/off and per line, then frequency, per word, shortest word, and which letters stretch (after س ش ص ض, before a final ة ه د ذ or ا ل ك, any other joint).</li>
+  <li><b>Indent</b> in ch, for broken paragraphs. Size now goes to 4.5 rem and Line height is under Type's more, for the display-size version.</li>
+  <li><b>Units a developer would write:</b> width and indent in <code>ch</code>, size in <code>rem</code>. Changing the typeface or size keeps the characters a line.</li>
+  <li><b>Paragraph numbers</b>, faint, outside the text on its starting side.</li>
+</ul>
+
+<h2>Also new</h2>
+<ul>
+  <li>Under each column's head, a ruler in four styles (Show › Ruler): hairline, dimension, ticks or none. Its bar at the end is the rag zone, so you see Rag change as you drag it.</li>
+  <li>Alone, the head's label is yours to pick (Show › Label): the type spec, 19/29.5 Source Serif 4; the block's size; a figure caption; the sample; or nothing. Comparing, Unjustified and Browser.</li>
+  <li>The status bar counts what nothing else shows: characters a line, minutes to read, tatweels.</li>
+  <li>A faint width handle that darkens when you reach for it. No crop marks.</li>
+  <li>The canvas is framed like an app window: the block sits in its vertical middle (it holds still while you type), and a status bar along the bottom edge shows paragraphs, words, characters and the setup.</li>
+  <li>Arabic mirrors the whole canvas: columns anchor on the right, the handle moves to the left edge.</li>
+</ul>
+
+<h2>Real and stand-in</h2>
+<ul>
+  <li>Really change the text: sample, direction, typeface, size, width, indent, line height, letter spacing, hyphenate, nearly justified, every kashida control, and Show's numbers, rag zone, guides and tatweels.</li>
+  <li>The unjustified column is still CSS (<code>text-wrap: pretty</code>), not the composer. Kashida is a rough stand-in: it stretches lines that have room, using the app's letter ranking.</li>
+  <li>Everything else only shows its value.</li>
+</ul>
+</body>
+</html>

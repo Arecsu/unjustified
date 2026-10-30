@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B2 · Toolbar of cells — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { min-height: 100dvh; padding-bottom: 12rem; }
+  header { display: flex; align-items: baseline; padding: 1.25rem var(--margin) 4.5rem; }
+  header .sp { margin-left: auto; font-size: .8125rem; text-transform: uppercase; }
+
+  .bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    translate: -50% 0;
+    z-index: 3;
+    display: flex;
+    background: var(--fg);
+    color: var(--bg);
+    font-size: .875rem;
+    text-transform: uppercase;
+    max-width: calc(100vw - 2rem);
+  }
+  .bar button { padding: .85rem 1rem; white-space: nowrap; }
+  .bar button[aria-expanded='true'], .bar button[aria-pressed='true'] { background: var(--bg); color: var(--fg); }
+  @media (hover: hover) { .bar button:hover:not([aria-expanded='true'], [aria-pressed='true']) { background: #333; } }
+  .bar .sep { width: 1px; background: #444; margin: .5rem .25rem; flex-shrink: 0; }
+  .bar .groups { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .bar .views { display: flex; }
+
+  .sheet {
+    position: fixed;
+    left: 50%;
+    bottom: 5rem;
+    translate: -50% 0;
+    z-index: 3;
+    width: min(48rem, calc(100vw - 2rem));
+    max-height: 60dvh;
+    overflow-y: auto;
+    background: var(--bg);
+    border: var(--rule);
+    padding: .9rem 1rem 1rem;
+  }
+  .sheet h2 { font: inherit; font-size: .8125rem; text-transform: uppercase; margin: 0 0 .75rem; display: flex; justify-content: space-between; }
+  .sheet .cells { --cell-min: 10.5rem; }
+
+  @media (max-width: 56em) {
+    header { padding-bottom: 2.5rem; }
+    .bar { left: 0; right: 0; bottom: 0; translate: none; max-width: none; padding-bottom: env(safe-area-inset-bottom); }
+    .bar .groups { flex: 1; }
+    .bar .views button { padding-inline: .7rem; }
+    .sheet { left: 0; bottom: 3.05rem; translate: none; width: 100%; border-inline: 0; border-bottom: 0; max-height: 55dvh; padding-inline: var(--margin); }
+    .sheet .cells { --cell-min: 8.5rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>unjustified</b><span class="muted">lab</span><a class="hl" href="./index.html">↙</a></div>
+  <span class="sp"><button class="hl" data-edit>edit text</button></span>
+</header>
+<main id="canvas"></main>
+
+<div class="sheet" hidden></div>
+<nav class="bar">
+  <div class="groups"></div>
+  <span class="sep"></span>
+  <div class="views"><button data-view-set="a">A</button><button data-view-set="b">B</button><button data-view-set="ab">A+B</button></div>
+</nav>
+
+<script type="module">
+  import { GROUPS, cellHTML, pairHTML, start } from './proto.js';
+  document.querySelector('#canvas').innerHTML = pairHTML();
+  const sheet = document.querySelector('.sheet');
+  const groups = document.querySelector('.bar .groups');
+  groups.innerHTML = GROUPS.map(g => `<button data-g="${g.id}" aria-expanded="false">${g.label}</button>`).join('');
+  sheet.innerHTML = GROUPS.map(g => `<section data-g="${g.id}" hidden><h2><span>${g.label}</span><button class="hl up" data-close>close ×</button></h2><div class="cells">${g.controls.map(cellHTML).join('')}</div></section>`).join('');
+  function open(id) {
+    groups.querySelectorAll('[data-g]').forEach(b => b.setAttribute('aria-expanded', b.dataset.g === id));
+    sheet.querySelectorAll('section').forEach(s => s.hidden = s.dataset.g !== id);
+    sheet.hidden = !id;
+  }
+  groups.addEventListener('click', e => {
+    const b = e.target.closest('[data-g]');
+    if (b) open(b.getAttribute('aria-expanded') === 'true' ? null : b.dataset.g);
+  });
+  sheet.addEventListener('click', e => { if (e.target.closest('[data-close]')) open(null); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') open(null); });
+  start('ab');
+</script>
+</body>
+</html>

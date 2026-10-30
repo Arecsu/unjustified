@@ -1,0 +1,531 @@
+/* Round 3 base. Self-contained: nothing outside this folder reads it. */
+@font-face {
+  font-family: InterVariable;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+  font-family: InterVariable;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+  --bg: #e8e6e3;
+  --fg: #000;
+  --fg-2: #77756f;
+  --fg-3: #aeaeae;
+  --paper: #fbfbfb;
+  --rule: 1px solid var(--fg);
+  --hair: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  --margin: clamp(1.25rem, 5vw, 2rem);
+  /* malejandro.com's label gutter: the logo's width plus the header gap, less the label gap. */
+  --label-gap: clamp(2rem, 3.5vw, 3rem);
+  --label-col: calc(5.175rem + clamp(4rem, 7vw, 7rem) - var(--label-gap));
+  --col-gap: 4.5rem;
+  /* Room the paragraph numbers take before the text: their width and their gap. */
+  --num-w: 2.25rem;
+  --num-gap: .75rem;
+  --panel-w: 24rem;
+  --tiny: .6875rem;
+
+  --size: 1.2rem;
+  --lh: 1.55;
+  --ls: 0em;
+  --measure: 40ch;
+  --measure-px: 390px;
+  --indent: 0ch;
+  --font: 'Source Serif 4 Variable', Georgia, serif;
+  --hyphens: manual;
+  --rag: 5.5;
+
+  font-family: InterVariable, sans-serif;
+  font-feature-settings: 'calt';
+  font-variation-settings: 'opsz' 16;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
+a { color: inherit; text-decoration: none; }
+[hidden] { display: none !important; }
+::selection { background: color-mix(in srgb, var(--fg) 22%, transparent); }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+.num { font-feature-settings: 'cv04', 'tnum', 'calt'; }
+.muted { color: var(--fg-2); }
+.ar { font-family: 'Noto Sans Arabic Variable', sans-serif; }
+
+/* Black block on hover/press, as on the site. */
+.hl { padding: 0 .2em; margin: 0 -.2em; }
+@media (hover: hover) and (pointer: fine) { .hl:hover { background: var(--fg); color: var(--bg); } }
+@media (pointer: coarse) { .hl:active { background: var(--fg); color: var(--bg); } }
+.hl[aria-pressed='true'], .hl[aria-selected='true'] { background: var(--fg); color: var(--bg); }
+
+.brand { display: flex; gap: 1rem; align-items: baseline; }
+.brand b { font-weight: 500; }
+
+/* ---------------------------------------------------------------------------
+   Page: header and canvas on the left, the panel on the right.
+   --------------------------------------------------------------------------- */
+body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--panel-w);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100dvh;
+}
+.top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.25rem var(--margin);
+  border-bottom: var(--rule);
+}
+.modes { display: flex; gap: 2.25rem; align-items: baseline; }
+.seg { display: flex; gap: .7rem; align-items: baseline; }
+main { overflow-y: auto; min-width: 0; }
+/* The block sits in the middle of the canvas; proto.js sets the top margin. */
+.stage { padding: 2.5rem 0; }
+/* The canvas's bottom edge, matching the header: counts and the setup at a glance. */
+.status {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .6rem var(--margin);
+  border-top: var(--rule);
+  font-size: .8125rem;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.status span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.status .sep { margin-inline: .65rem; }
+.readings { display: none; }
+.exit { display: none; }
+.narrow { display: none; }
+
+/* ---------------------------------------------------------------------------
+   Panel. Round 1 A's rows, with the site's right-aligned labels in a gutter.
+   --------------------------------------------------------------------------- */
+.panel {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  border-left: var(--rule);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  font-size: .9375rem;
+}
+.groups { padding: 1.25rem 1.25rem 3rem; }
+.tabs { display: none; }
+.group {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  column-gap: 1rem;
+  align-items: first baseline;
+  padding-block: .85rem 1rem;
+  border-top: var(--hair);
+}
+.group:first-child { border-top: 0; padding-top: 0; }
+.group h2 {
+  font: inherit;
+  font-size: .8125rem;
+  text-transform: uppercase;
+  text-align: right;
+  margin: 0;
+  padding-top: .3rem;
+}
+.rows { min-width: 0; display: flex; flex-direction: column; }
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: .75rem;
+  padding: .3rem 0;
+}
+.row > input[type='range'], .row > .sel { grid-column: 1 / -1; }
+.row .lbl { display: flex; gap: .5rem; align-items: baseline; min-width: 0; white-space: nowrap; }
+.row .out { display: flex; gap: .5rem; align-items: baseline; }
+.row.toggle { align-items: center; cursor: pointer; }
+.row.dim > * { opacity: .4; }
+.row.split > .out, .row.split > input { display: none; }
+/* Auto width: the value is read from the window, not set. Grey number, hollow thumb,
+   as a computed value reads in an inspector. Black and solid once you set it. */
+.row.is-auto output { color: var(--fg-2); }
+.row.is-auto input[type='range']::-webkit-slider-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
+.row.is-auto input[type='range']::-moz-range-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
+.row.sub .lbl { padding-inline-start: 1rem; }
+.row.note .sub { font-size: .8125rem; text-transform: uppercase; color: var(--fg-2); padding-top: .4rem; }
+.row .ar { font-size: 1.05em; letter-spacing: .12em; }
+.opt { font-size: .8125rem; color: var(--fg-2); }
+
+/* Specimen T-04, strike: off strikes the word through. The strike is a transparent
+   copy with a line-through, clipped to --k and wiped in and out; the word itself
+   fades, the strike stays full ink. */
+@property --k { syntax: '<number>'; inherits: true; initial-value: 1; }
+.sk { position: relative; --k: 1; --ink: var(--fg); transition: --k .28s cubic-bezier(.2, .8, .2, 1); }
+.sk[aria-pressed='false'] { --k: 0; }
+.sk .base { color: var(--fg); transition: color .2s; }
+.sk[aria-pressed='false'] .base { color: var(--fg-2); }
+.sk .over {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  text-decoration: line-through var(--ink) max(1.5px, .07em);
+  clip-path: inset(-.3em calc(var(--k) * 100%) -.3em 0);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .sk { transition: none; } }
+.more { align-self: flex-start; font-size: .8125rem; color: var(--fg-2); margin-top: .4rem; }
+.gnote { margin: .35rem 0 0; font-size: .8125rem; color: var(--fg-2); text-wrap: pretty; }
+.gnote button { color: var(--fg); }
+.foot { display: flex; justify-content: flex-end; padding-top: 1rem; border-top: var(--hair); font-size: .8125rem; }
+
+input[type='range'] {
+  appearance: none;
+  background: none;
+  width: 100%;
+  height: 1.25rem;
+  margin: 0;
+  cursor: ew-resize;
+  touch-action: pan-y;
+  /* A tick at the default. The thumb covers it there, so it shows only once the
+     value has moved: the slider's own "changed" mark. */
+  background: linear-gradient(var(--fg), var(--fg)) no-repeat;
+  background-size: 1px .6rem;
+  background-position: calc(.25rem + var(--d, -1) * (100% - .5rem)) 50%;
+}
+input[type='range']::-webkit-slider-runnable-track { height: 1px; background: var(--fg); }
+input[type='range']::-moz-range-track { height: 1px; background: var(--fg); }
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: .5rem;
+  height: 1rem;
+  margin-top: calc(-.5rem + .5px);
+  background: var(--fg);
+  border: 0;
+  border-radius: 0;
+}
+input[type='range']::-moz-range-thumb { width: .5rem; height: 1rem; background: var(--fg); border: 0; border-radius: 0; }
+
+input[type='checkbox'] {
+  appearance: none;
+  width: .875rem;
+  height: .875rem;
+  border: var(--rule);
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+input[type='checkbox']:checked { background: var(--fg); }
+
+.sel { position: relative; display: block; margin-top: .2rem; }
+.sel::after { content: '↓'; position: absolute; right: .5em; top: 50%; translate: 0 -50%; pointer-events: none; }
+.sel select {
+  appearance: none;
+  width: 100%;
+  border: var(--rule);
+  border-radius: 0;
+  background: transparent;
+  padding: .3em 1.6em .3em .45em;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+   Columns. The unjustified one alone, or the browser's beside it. Side by side
+   always; the row scrolls sideways when it doesn't fit.
+   --------------------------------------------------------------------------- */
+.pair {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  column-gap: var(--col-gap);
+  /* Sideways only. A sideways scroller also scrolls down unless told not to, and
+     the handle, which reaches below the text, would give it a stray vertical scroll. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--margin);
+  padding-inline: var(--margin);
+  scrollbar-width: thin;
+}
+/* The numbers hang before the text, so the row keeps room for them: the row
+   scrolls sideways and would clip anything outside it. */
+.numbers .pair { padding-inline-start: calc(var(--margin) + var(--num-w)); scroll-padding-inline-start: calc(var(--margin) + var(--num-w)); }
+:root:not([data-compare]) .col[data-col='b'] { display: none; }
+/* Room under the text for the handle, which reaches a little below it. */
+.col { scroll-snap-align: start; padding-bottom: 1rem; }
+.col-head {
+  width: var(--measure-px);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .25rem 1rem;
+  flex-wrap: wrap;
+  font-size: .8125rem;
+  text-transform: uppercase;
+  padding-bottom: .4rem;
+  border-bottom: var(--rule);
+}
+.col-head .m { text-transform: none; color: var(--fg-2); direction: ltr; unicode-bidi: isolate; }
+
+/* Under the head, four styles to try (Show › Ruler). Each but None marks the rag
+   zone at the line's end: the same line turns dashed there, a drawing's mark for
+   a tolerance, like the dashed width handle. Opaque, so it covers the solid rule. The height stays the same in every style, so switching never moves
+   the text. */
+.ruler { position: relative; width: var(--measure-px); height: .9rem; margin-bottom: 1.35rem; }
+.ruler .w { display: none; }
+.ruler::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  inset-inline-end: 0;
+  width: calc(var(--measure-px) * var(--rag) / 100);
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--fg) 0 3px, var(--bg) 3px 6px);
+}
+[data-ruler='none'] .ruler::after { display: none; }
+/* Ticks: the pixel ruler, quiet. A tick every 10px, a longer one every 50. */
+[data-ruler='ticks'] .ruler {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--fg) 35%, transparent) 1px, transparent 0) 0 0 / 50px .5rem repeat-x,
+    linear-gradient(90deg, color-mix(in srgb, var(--fg) 15%, transparent) 1px, transparent 0) 0 0 / 10px .25rem repeat-x;
+}
+[dir='rtl'][data-ruler='ticks'] .ruler, [data-ruler='ticks'] [dir='rtl'] .ruler { background-position: right 0 top 0, right 0 top 0; }
+/* Dimension: a drawing's dimension line, end to end, with the width in its middle. */
+[data-ruler='dimension'] .ruler {
+  --d: color-mix(in srgb, var(--fg) 30%, transparent);
+  background:
+    linear-gradient(var(--d), var(--d)) 0 50% / 100% 1px no-repeat,
+    linear-gradient(var(--d), var(--d)) 0 0 / 1px 100% no-repeat,
+    linear-gradient(var(--d), var(--d)) 100% 0 / 1px 100% no-repeat;
+}
+[data-ruler='dimension'] .ruler::after { top: calc(50% - .5px); background: repeating-linear-gradient(90deg, var(--d) 0 3px, var(--bg) 3px 6px); }
+[data-ruler='dimension'] .ruler .w {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  padding: 0 .4rem;
+  background: var(--bg);
+  font-size: var(--tiny);
+  line-height: 1;
+  color: var(--fg-2);
+}
+
+.frame { position: relative; width: fit-content; }
+
+/* Width handle, just past the column's end edge: right for Latin, left for
+   Arabic. */
+.handle {
+  position: absolute;
+  top: -.75rem;
+  bottom: -.75rem;
+  inset-inline-end: -1rem;
+  width: 1.5rem;
+  translate: 50% 0;
+  cursor: col-resize;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  /* Faint until you reach for it. */
+  opacity: .3;
+  transition: opacity .2s;
+}
+.handle:hover, .handle.drag { opacity: 1; }
+[dir='rtl'] .handle { translate: -50% 0; }
+[data-compare] .col[data-col='b'] .handle { display: none; }
+.handle::before { content: ''; position: absolute; inset: 0 auto 0 50%; border-left: 1px dashed var(--fg); }
+.handle > span:first-child { position: relative; background: var(--bg); padding: .25rem 0; font-size: .8125rem; }
+@media (hover: hover) { .handle:hover::before, .handle.drag::before { border-left-style: solid; } }
+
+/* The composed text. The unjustified column stands in for the optimizer with
+   text-wrap: pretty. Always editable. */
+.text {
+  font: 400 var(--size)/var(--lh) var(--font);
+  letter-spacing: var(--ls);
+  width: var(--measure);
+  hyphens: var(--hyphens);
+  -webkit-hyphens: var(--hyphens);
+  text-wrap: wrap;
+  font-optical-sizing: auto;
+  outline: none;
+  cursor: text;
+  counter-reset: para;
+}
+.text p { position: relative; margin: 0 0 1.25em; text-indent: var(--indent); counter-increment: para; }
+.text p:last-child { margin-bottom: 0; }
+[data-indent='first'] .text p:not(:first-child), [data-indent='rest'] .text p:first-child { text-indent: 0; }
+.text[data-col='u'] { text-wrap: pretty; }
+.justify-u .text[data-col='u'], .justify-b .text[data-col='b'] { text-align: justify; }
+/* Holding ragged or justified: the browser's column takes the unjustified one's
+   place, same width, same spot. */
+:root[data-peeking] .col[data-col='u'] { display: none; }
+:root[data-peeking] .col[data-col='b'] { display: block; }
+[data-peek] { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.guides .text {
+  background: repeating-linear-gradient(transparent 0 calc(var(--size) * var(--lh) - 1px), color-mix(in srgb, var(--fg) 14%, transparent) 0 calc(var(--size) * var(--lh)));
+}
+/* The rag zone: where line ends are allowed to land. */
+.diag .text { box-shadow: inset calc(var(--measure-px) * var(--rag) / -100) 0 0 color-mix(in srgb, var(--fg) 7%, transparent); }
+.rtl.diag .text { box-shadow: inset calc(var(--measure-px) * var(--rag) / 100) 0 0 color-mix(in srgb, var(--fg) 7%, transparent); }
+.tw-marks .tw { background: color-mix(in srgb, var(--fg) 16%, transparent); }
+
+/* Paragraph numbers outside the text, on its starting side. Generated content,
+   so it can't be typed into or copied. */
+.numbers .text p::before {
+  position: absolute;
+  inset-inline-end: calc(100% + var(--num-gap));
+  font: 400 var(--tiny)/1.35 InterVariable, sans-serif;
+  font-feature-settings: 'cv04', 'tnum';
+  letter-spacing: 0;
+  text-indent: 0;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  pointer-events: none;
+  user-select: none;
+  content: counter(para, decimal-leading-zero);
+  top: calc((var(--size) * var(--lh) - var(--tiny) * 1.35) / 2);
+  color: color-mix(in srgb, var(--fg) 40%, transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   Layouts. ?layout=left (default), centre, gutter, wide.
+   --------------------------------------------------------------------------- */
+[data-layout='centre'] .pair { justify-content: safe center; }
+[data-layout='centre'][data-compare] .col[data-col='u'] .handle { display: none; }
+[data-layout='centre'][data-compare] .col[data-col='b'] .handle { display: grid; }
+
+/* The site's own grid: margin, label gutter, gap, content. The gutter holds the
+   readings, right-aligned like WEB / ROLE / TIMELINE on a work page. */
+@media (min-width: 75em) {
+  [data-layout='gutter'] .stage {
+    display: grid;
+    grid-template-columns: var(--margin) var(--label-col) var(--label-gap) minmax(0, 1fr);
+    align-items: start;
+  }
+  [data-layout='gutter'] .readings {
+    grid-column: 2;
+    position: sticky;
+    top: 1.75rem;
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: end;
+    gap: .35rem .9rem;
+    margin: 2.4rem 0 0;
+    font-size: .8125rem;
+  }
+  [data-layout='gutter'] .readings dt { text-transform: uppercase; text-align: right; }
+  [data-layout='gutter'] .readings dd { margin: 0; text-align: right; direction: ltr; unicode-bidi: isolate; }
+  [data-layout='gutter'] .pair { grid-column: 4; padding-inline-start: 0; scroll-padding-inline-start: 0; }
+  /* Here the numbers hang in the label gap and the text keeps the content line. */
+  [data-layout='gutter'].numbers .pair { margin-inline-start: calc(var(--num-w) * -1); padding-inline-start: var(--num-w); scroll-padding-inline-start: var(--num-w); }
+  [data-layout='gutter'] .col[data-col='u'] .col-head .m { visibility: hidden; }
+}
+
+/* The panel takes the spare width and lays its groups in two columns. */
+@media (min-width: 87.5em) {
+  [data-layout='wide'] { --panel-w: 42rem; }
+  [data-layout='wide'] .groups { columns: 2; column-gap: 2rem; }
+  /* Rules under each group, so neither column starts with one. */
+  [data-layout='wide'] .group { break-inside: avoid; border-top: 0; border-bottom: var(--hair); padding-block: 0 1rem; margin-bottom: .85rem; }
+  [data-layout='wide'] .foot { border-top: 0; padding-top: 0; }
+}
+
+/* ---------------------------------------------------------------------------
+   Focus: everything but the text and the focus button fades. Nothing moves or
+   leaves the layout, and the faded controls still work.
+   --------------------------------------------------------------------------- */
+.brand, .seg > *, .panel, .status, .col-head, .ruler, .handle, .readings,
+.text p::before { transition: opacity .3s; }
+.top { transition: border-color .3s; }
+[data-focus] :is(.brand, .seg > :not([data-focus]), .panel, .status, .col-head, .ruler, .handle, .readings),
+[data-focus] .text p::before { opacity: .1; }
+[data-focus] .top { border-bottom-color: color-mix(in srgb, var(--fg) 10%, transparent); }
+
+/* ---------------------------------------------------------------------------
+   Read: only the text, where a post would sit on malejandro.com.
+   --------------------------------------------------------------------------- */
+[data-read] body { display: block; height: auto; }
+[data-read] .top, [data-read] .panel, [data-read] .status, [data-read] .col-head, [data-read] .ruler,
+[data-read] .handle, [data-read] .readings,
+[data-read] .col[data-col='b'] { display: none; }
+[data-read] main { overflow: visible; }
+[data-read] .stage { display: block; padding: clamp(4rem, 16vh, 10rem) 0 8rem; }
+[data-read] .pair, [data-read].numbers .pair { padding-inline: calc(var(--margin) + var(--label-col) + var(--label-gap)) var(--margin); }
+[data-read] .exit {
+  display: block;
+  position: fixed;
+  top: .75rem;
+  right: var(--margin);
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 400;
+}
+
+/* ---------------------------------------------------------------------------
+   Phones: a bar that never moves; a group's sheet opens above it.
+   --------------------------------------------------------------------------- */
+@media (max-width: 56em) {
+  :root { --col-gap: 3.25rem; --num-w: 1.85rem; --num-gap: .45rem; }
+  body { display: block; height: auto; }
+  .top { padding: 1rem var(--margin); flex-wrap: wrap; row-gap: .6rem; }
+  .modes { gap: 1.1rem; }
+  .seg { gap: .5rem; }
+  .wide { display: none; }
+  .narrow { display: inline; }
+  main { overflow: visible; padding-bottom: 4rem; }
+  .stage { padding-top: 1.25rem; margin-top: 0 !important; }
+  .status { display: none; }
+  /* Left and centre are the same on a phone. */
+  .seg:first-child { display: none; }
+  /* Closer to the text, so it fits in the page margin. */
+  .handle { inset-inline-end: -.7rem; width: 1.25rem; }
+  .panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3;
+    border-left: 0;
+    overflow: visible;
+  }
+  .tabs {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+    background: var(--bg);
+    border-top: var(--rule);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabs button { padding: .9rem 1rem; text-transform: uppercase; font-size: .8125rem; white-space: nowrap; }
+  .tabs button[aria-selected='true'] { background: var(--fg); color: var(--bg); }
+  .groups {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    max-height: 55dvh;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    background: var(--bg);
+    border-top: var(--rule);
+    padding: .75rem var(--margin) 1.25rem;
+  }
+  .groups:not(:has(.group.on)) { display: none; }
+  .group { display: none; grid-template-columns: minmax(0, 1fr); border: 0; padding: 0; }
+  .group.on { display: grid; }
+  .group h2 { display: none; }
+  .foot { margin-top: 1rem; }
+  [data-read] .pair, [data-read].numbers .pair { padding-inline: var(--margin); }
+  [data-read] .exit { font-size: 2.25rem; }
+}

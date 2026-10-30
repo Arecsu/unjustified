@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab round 2 — unjustified</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { padding: 1.25rem var(--margin) 4rem; max-width: 60rem; }
+  h1 { font-weight: 500; font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: -.02em; line-height: 1.05; margin: 3rem 0 2rem; font-variation-settings: 'opsz' 32; }
+  ol { list-style: none; padding: 0; margin: 0; border-top: var(--rule); }
+  li { border-bottom: var(--rule); }
+  ol a { display: grid; grid-template-columns: 3rem 11rem 1fr; gap: 1rem; padding: 1rem 0; align-items: baseline; }
+  @media (hover: hover) { ol a:hover { background: var(--fg); color: var(--bg); } }
+  ol b { font-weight: 500; font-size: 1.5rem; }
+  h2 { font: inherit; text-transform: uppercase; font-size: .8125rem; margin: 3rem 0 .75rem; }
+  ul { margin: 0; padding-left: 1.1rem; line-height: 1.6; color: var(--fg-2); }
+  @media (max-width: 40em) { ol a { grid-template-columns: 2.5rem 1fr; } ol a span:last-child { grid-column: 2; } }
+</style>
+</head>
+<body>
+<div class="brand"><b>unjustified</b><span class="muted">lab · round 2</span><a class="hl" href="../index.html">↙</a></div>
+<h1>Values you drag, rectangles you press.</h1>
+<ol>
+  <li><a href="./a-panel.html"><span class="num">A2</span><b>Panel of cells</b><span>Round 1 A, with C's rectangles instead of sliders. Mobile sheet opens above a bar that never moves.</span></a></li>
+  <li><a href="./b-toolbar.html"><span class="num">B2</span><b>Toolbar of cells</b><span>Round 1 B. Each group opens a sheet of rectangles above the black bar.</span></a></li>
+  <li><a href="./d-spec.html"><span class="num">D2</span><b>Spec</b><span>Round 1 D with air, on the site's label grid. Scroll past it and one group follows you in a strip.</span></a></li>
+  <li><a href="./e-bar.html"><span class="num">E</span><b>Value bar</b><span>New. B's black bar holds D's values directly: pick a group, drag in place. Nothing pops open.</span></a></li>
+</ol>
+<h2>Round 1</h2>
+<ol>
+  <li><a href="../round-1/a-panel.html"><span class="num">A</span><b>Panel</b><span>Inter-lab style. Text fills the screen, one dense ruled panel on the right. Bottom sheet with group tabs on mobile.</span></a></li>
+  <li><a href="../round-1/b-toolbar.html"><span class="num">B</span><b>Toolbar</b><span>Nothing but text until you ask. A black floating bar of groups; each opens a ruled sheet above it.</span></a></li>
+  <li><a href="../round-1/c-ledger.html"><span class="num">C</span><b>Ledger</b><span>The site's label gutter. Every control visible at once as a ruled sheet; a black strip of values follows you down.</span></a></li>
+  <li><a href="../round-1/d-scrub.html"><span class="num">D</span><b>Scrub</b><span>No sliders. Parameters read as lines of values you drag sideways; the column's edge sets its width.</span></a></li>
+</ol>
+<h2>Taken from round 1</h2>
+<ul>
+  <li>A+B always side by side; the row scrolls sideways when it doesn't fit.</li>
+  <li>Width handle sits between the columns in A+B, and on the column's edge in A or B alone.</li>
+  <li>Every range is a scrub value. Its underline is a real underline that skips descenders; the solid part is the value's position.</li>
+  <li>On/off are C's rectangles: the whole cell presses, a small square at the top right.</li>
+  <li>Symbols kept: ln, Σ, short.</li>
+</ul>
+</body>
+</html>

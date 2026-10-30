@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>B · Toolbar — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { min-height: 100dvh; padding: 6rem 2rem 12rem; }
+  .corner { position: fixed; top: 1.25rem; z-index: 2; font-size: .9375rem; }
+  .corner.l { left: 2rem; display: flex; gap: 1rem; align-items: baseline; }
+  .corner.r { right: 2rem; text-align: right; font-size: .8125rem; line-height: 1.6; }
+  .corner.r table { border-collapse: collapse; }
+  .corner.r td { padding: 0 0 0 1rem; }
+  .corner.r th { font-weight: 400; text-align: left; color: var(--fg-2); }
+
+  .canvas { display: flex; justify-content: center; gap: 4rem; flex-wrap: wrap; }
+  [data-view='a'] .col[data-col='b'], [data-view='b'] .col[data-col='a'] { display: none; }
+  .col-head { font-size: .8125rem; text-transform: uppercase; margin-bottom: 1.5rem; display: flex; gap: 1rem; }
+
+  .bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    translate: -50% 0;
+    z-index: 3;
+    display: flex;
+    align-items: stretch;
+    background: var(--fg);
+    color: var(--bg);
+    font-size: .875rem;
+    text-transform: uppercase;
+    max-width: calc(100vw - 2rem);
+  }
+  .bar button { padding: .85rem 1rem; white-space: nowrap; }
+  .bar button[aria-expanded='true'], .bar button[aria-pressed='true'] { background: var(--bg); color: var(--fg); }
+  @media (hover: hover) { .bar button:hover { background: #333; } }
+  .bar .sep { width: 1px; background: #444; margin: .5rem .25rem; }
+  .bar .groups { display: flex; overflow-x: auto; scrollbar-width: none; }
+
+  .pop {
+    position: fixed;
+    left: 50%;
+    bottom: 5rem;
+    translate: -50% 0;
+    z-index: 3;
+    width: min(46rem, calc(100vw - 2rem));
+    max-height: 60dvh;
+    overflow-y: auto;
+    background: var(--paper);
+    border: var(--rule);
+    padding: 1rem 1.25rem 1.25rem;
+    font-size: .9375rem;
+  }
+  .pop h2 { font: inherit; font-size: .8125rem; text-transform: uppercase; margin: 0 0 1rem; display: flex; justify-content: space-between; }
+  .pop .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr)); gap: 1rem 1.75rem; }
+  .ctl { display: grid; grid-template-columns: 1fr auto; gap: .2rem .5rem; align-items: center; }
+  .ctl input[type='range'], .ctl .sel { grid-column: 1 / -1; }
+  .ctl.toggle { cursor: pointer; }
+
+  @media (max-width: 56em) {
+    body { padding: 4.5rem 1.25rem 10rem; }
+    .corner.l { left: 1.25rem; top: 1rem; }
+    .corner.r { display: none; }
+    .canvas { gap: 3rem; }
+    .bar { left: 0; right: 0; bottom: 0; translate: none; max-width: none; padding-bottom: env(safe-area-inset-bottom); }
+    .bar .groups { flex: 1; }
+    .bar .views button { padding-inline: .7rem; }
+    .pop { left: 0; bottom: 3rem; translate: none; width: 100%; border-inline: 0; border-bottom: 0; max-height: 50dvh; }
+    .pop .grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
+  }
+  .metrics-inline { display: none; font-size: .8125rem; }
+  @media (max-width: 56em) { .metrics-inline { display: flex; gap: 1rem; } }
+</style>
+</head>
+<body>
+<div class="corner l"><b style="font-weight:500">unjustified</b><span class="muted">lab</span><a class="hl muted" href="./index.html" style="color:inherit;text-decoration:none">↙</a></div>
+<div class="corner r num">
+  <table>
+    <tr><th></th><td>A</td><td>B</td></tr>
+    <tr><th>lines</th><td data-m="a.lines">–</td><td data-m="b.lines">–</td></tr>
+    <tr><th>rag σ</th><td data-m="a.dev">–</td><td data-m="b.dev">–</td></tr>
+    <tr><th>short</th><td data-m="a.short">–</td><td data-m="b.short">–</td></tr>
+  </table>
+</div>
+
+<main class="canvas">
+  <section class="col" data-col="a"><div class="col-head"><span>A — Browser</span><span class="metrics-inline num muted">σ <span data-m="a.dev"></span> · short <span data-m="a.short"></span></span></div><div class="text" data-col="a"></div></section>
+  <section class="col" data-col="b"><div class="col-head"><span>B — Unjustified</span><span class="metrics-inline num muted">σ <span data-m="b.dev"></span> · short <span data-m="b.short"></span></span></div><div class="text" data-col="b"></div></section>
+</main>
+
+<div class="pop" hidden></div>
+<nav class="bar">
+  <div class="groups"></div>
+  <span class="sep"></span>
+  <div class="views" style="display:flex">
+    <button data-view-set="a">A</button><button data-view-set="b">B</button><button data-view-set="ab">A+B</button>
+  </div>
+</nav>
+
+<script type="module">
+  import { GROUPS, inputHTML, valueHTML, start } from './proto.js';
+  const pop = document.querySelector('.pop');
+  const groups = document.querySelector('.bar .groups');
+  groups.innerHTML = GROUPS.map(g => `<button data-g="${g.id}" aria-expanded="false">${g.label}</button>`).join('');
+  pop.innerHTML = GROUPS.map(g => `<section data-g="${g.id}" hidden><h2><span>${g.label}</span><button class="hl" data-close>Close ×</button></h2><div class="grid">${g.controls.map(c => c.type === 'toggle'
+    ? `<label class="ctl toggle"><span>${c.label}</span>${inputHTML(c)}</label>`
+    : `<div class="ctl"><span>${c.label}</span>${c.type === 'range' ? valueHTML(c) : '<span></span>'}${inputHTML(c)}</div>`).join('')}</div></section>`).join('');
+  function open(id) {
+    groups.querySelectorAll('[data-g]').forEach(b => b.setAttribute('aria-expanded', b.dataset.g === id));
+    pop.querySelectorAll('section').forEach(s => s.hidden = s.dataset.g !== id);
+    pop.hidden = !id;
+  }
+  groups.addEventListener('click', e => {
+    const b = e.target.closest('[data-g]');
+    if (b) open(b.getAttribute('aria-expanded') === 'true' ? null : b.dataset.g);
+  });
+  pop.addEventListener('click', e => { if (e.target.closest('[data-close]')) open(null); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') open(null); });
+  start(matchMedia('(max-width: 56em)').matches ? 'b' : 'ab');
+</script>
+</body>
+</html>

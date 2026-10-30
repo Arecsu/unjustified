@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>D2 · Spec — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  :root { --label-col: 6.5rem; --label-gap: clamp(1.5rem, 3.5vw, 3rem); --content-start: calc(var(--margin) + var(--label-col) + var(--label-gap)); }
+  body { padding-bottom: 5rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: var(--margin) [label] var(--label-col) var(--label-gap) [content] minmax(0, 1fr) var(--margin);
+  }
+  .grid > * { grid-column: content; }
+  .grid > .lbl { grid-column: label; justify-self: end; text-align: right; text-transform: uppercase; }
+
+  header { display: flex; justify-content: space-between; align-items: baseline; padding: 1.25rem var(--margin) 3.5rem; }
+  header .sp { font-size: .8125rem; text-transform: uppercase; }
+
+  .spec { row-gap: 0; font-size: 1.0625rem; }
+  .spec > .lbl, .spec > .line { padding-block: .7rem; border-top: var(--hair); }
+  .spec > .lbl { font-size: .8125rem; line-height: 1.6rem; justify-self: stretch; }
+  .spec > :nth-last-child(-n+2) { border-bottom: var(--hair); }
+  .line { display: flex; flex-wrap: wrap; column-gap: 2rem; row-gap: .35rem; line-height: 1.6rem; }
+
+  .views { margin: 1.5rem 0 2.75rem; font-size: .8125rem; text-transform: uppercase; display: flex; gap: 1rem; }
+  .pair { padding-inline-start: var(--content-start); scroll-padding-inline-start: var(--content-start); }
+
+  /* Strip: one group's values, following you once the spec is out of view. */
+  .strip {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 3;
+    background: var(--bg);
+    border-bottom: var(--rule);
+    translate: 0 -101%;
+    transition: translate .15s;
+    padding: .6rem 0;
+  }
+  .strip.on { translate: 0 0; }
+  .strip .tabs { display: flex; gap: .9rem; font-size: .8125rem; text-transform: uppercase; justify-self: end; flex-wrap: wrap; justify-content: end; align-content: start; line-height: 1.6rem; }
+  .strip .tabs { grid-column: label / content; }
+  .strip .line { grid-column: content; }
+
+  @media (max-width: 56em) {
+    .grid { grid-template-columns: var(--margin) [label content] minmax(0, 1fr) var(--margin); }
+    .grid > .lbl { justify-self: start; text-align: left; }
+    header { padding-bottom: 2rem; }
+    .spec > .lbl { padding-bottom: 0; justify-self: stretch; }
+    .spec > .line { border-top: 0; padding-top: .25rem; }
+    .spec > .lbl:nth-last-child(2) { border-bottom: 0; }
+    .line { column-gap: 1.4rem; }
+    .pair { padding-inline-start: var(--margin); scroll-padding-inline-start: var(--margin); }
+    .strip { padding: .5rem 0 .6rem; }
+    .strip .tabs { justify-self: start; justify-content: start; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; width: 100%; padding-bottom: .25rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>unjustified</b><span class="muted">lab</span><a class="hl" href="./index.html">↙</a></div>
+  <div class="sp"><button class="hl" data-edit>edit text</button></div>
+</header>
+<section class="grid spec num"></section>
+<div class="grid"><div class="views"><button class="hl" data-view-set="a">A</button><button class="hl" data-view-set="b">B</button><button class="hl" data-view-set="ab">A+B</button></div></div>
+<main id="canvas"></main>
+
+<div class="strip grid num">
+  <div class="tabs"></div>
+  <div class="line"></div>
+</div>
+
+<script type="module">
+  import { GROUPS, GROUP_OF, tokHTML, pairHTML, onChange, start } from './proto.js';
+  document.querySelector('#canvas').innerHTML = pairHTML();
+  const spec = document.querySelector('.spec');
+  spec.innerHTML = GROUPS.map(g => `<span class="lbl">${g.label}</span><div class="line">${g.controls.map(c => tokHTML(c)).join('')}</div>`).join('');
+
+  const strip = document.querySelector('.strip');
+  const tabs = strip.querySelector('.tabs');
+  const line = strip.querySelector('.line');
+  let active = 'edge';
+  const show = id => {
+    active = id;
+    tabs.innerHTML = GROUPS.map(g => `<button class="hl" data-g="${g.id}" aria-pressed="${g.id === id}">${g.label}</button>`).join('');
+    line.innerHTML = GROUPS.find(g => g.id === id).controls.map(c => tokHTML(c)).join('');
+  };
+  show(active);
+  tabs.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) show(b.dataset.g); });
+  // The strip follows whatever group you touched last in the spec.
+  onChange(k => { if (!strip.classList.contains('on') && GROUP_OF[k] !== active) show(GROUP_OF[k]); });
+  new IntersectionObserver(([e]) => strip.classList.toggle('on', !e.isIntersecting && e.boundingClientRect.top < 0)).observe(spec);
+  start('ab');
+</script>
+</body>
+</html>

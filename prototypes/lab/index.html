@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab prototypes — unjustified</title>
+<link rel="stylesheet" href="./round-2/proto.css">
+<style>
+  body { padding: 1.25rem var(--margin) 4rem; max-width: 60rem; }
+  h1 { font-weight: 500; font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: -.02em; margin: 3rem 0 2rem; font-variation-settings: 'opsz' 32; }
+  h2 { font: inherit; text-transform: uppercase; font-size: .8125rem; margin: 2.5rem 0 .75rem; display: flex; justify-content: space-between; }
+  ol { list-style: none; padding: 0; margin: 0; border-top: var(--rule); }
+  li { border-bottom: var(--rule); }
+  ol a { display: grid; grid-template-columns: 3rem 11rem 1fr; gap: 1rem; padding: .85rem 0; align-items: baseline; }
+  @media (hover: hover) { ol a:hover { background: var(--fg); color: var(--bg); } }
+  ol b { font-weight: 500; font-size: 1.25rem; }
+  @media (max-width: 40em) { ol a { grid-template-columns: 2.5rem 1fr; } ol a span:last-child { grid-column: 2; } }
+</style>
+</head>
+<body>
+<div class="brand"><b>unjustified</b><span class="muted">lab · prototypes</span></div>
+<h1>Every round.</h1>
+
+<h2><span>Round 3</span><a class="hl" href="./round-3/index.html">notes →</a></h2>
+<ol>
+  <li><a href="./round-3/lab.html?layout=left"><span class="num">L</span><b>Left</b><span>A2 with round 1 A's controls; text on the left margin.</span></a></li>
+  <li><a href="./round-3/lab.html?layout=centre"><span class="num">C</span><b>Centred</b><span>The column in the middle of the canvas.</span></a></li>
+  <li><a href="./round-3/lab.html?layout=gutter"><span class="num">G</span><b>Gutter</b><span>The site's grid; readings in the label gutter.</span></a></li>
+  <li><a href="./round-3/lab.html?layout=wide"><span class="num">W</span><b>Wide panel</b><span>The panel takes the spare width, two columns of groups.</span></a></li>
+</ol>
+
+<h2><span>Specimens</span></h2>
+<ol>
+  <li><a href="./specimens/controls.html"><span class="num">S</span><b>Controls</b><span>Fifteen sliders and nine toggles, each live and stress-tested.</span></a></li>
+</ol>
+
+<h2><span>Round 2</span><a class="hl" href="./round-2/index.html">notes →</a></h2>
+<ol>
+  <li><a href="./round-2/a-panel.html"><span class="num">A2</span><b>Panel of cells</b><span>A's panel with C's rectangles; mobile sheet opens above a fixed bar.</span></a></li>
+  <li><a href="./round-2/b-toolbar.html"><span class="num">B2</span><b>Toolbar of cells</b><span>Black bar; each group opens a sheet of rectangles.</span></a></li>
+  <li><a href="./round-2/d-spec.html"><span class="num">D2</span><b>Spec</b><span>D with air on the label grid; a strip follows you down.</span></a></li>
+  <li><a href="./round-2/e-bar.html"><span class="num">E</span><b>Value bar</b><span>The black bar holds the values; drag in place.</span></a></li>
+</ol>
+
+<h2><span>Round 1</span><a class="hl" href="./round-1/index.html">notes →</a></h2>
+<ol>
+  <li><a href="./round-1/a-panel.html"><span class="num">A</span><b>Panel</b><span>Inter-lab style; one dense ruled panel of sliders.</span></a></li>
+  <li><a href="./round-1/b-toolbar.html"><span class="num">B</span><b>Toolbar</b><span>Black floating bar; each group opens a ruled sheet.</span></a></li>
+  <li><a href="./round-1/c-ledger.html"><span class="num">C</span><b>Ledger</b><span>Every control at once as ruled cells on the label grid.</span></a></li>
+  <li><a href="./round-1/d-scrub.html"><span class="num">D</span><b>Scrub</b><span>Lines of values you drag sideways.</span></a></li>
+</ol>
+</body>
+</html>

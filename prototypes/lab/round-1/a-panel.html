@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A · Panel — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 21rem;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 2rem;
+    padding: 1.25rem 2rem;
+    border-bottom: var(--rule);
+  }
+  header .brand { font-weight: 500; }
+  header nav { display: flex; gap: 1rem; margin-left: auto; }
+  .views { display: flex; gap: .5rem; }
+
+  .canvas { overflow: auto; display: grid; grid-template-columns: 1fr 1fr; }
+  [data-view='a'] .canvas, [data-view='b'] .canvas { grid-template-columns: 1fr; }
+  [data-view='a'] .col[data-col='b'], [data-view='b'] .col[data-col='a'] { display: none; }
+  .col { padding: 0 2rem 4rem; min-width: 0; }
+  .col + .col { border-left: var(--rule); }
+  .col-head {
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    display: grid;
+    grid-template-columns: auto 1fr repeat(3, auto);
+    gap: 1.25rem;
+    align-items: baseline;
+    padding: 1rem 0 .75rem;
+    margin-bottom: 2rem;
+    border-bottom: var(--hair);
+    font-size: .875rem;
+  }
+  .col-head b { font-weight: 500; }
+
+  aside {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    border-left: var(--rule);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 1.25rem 1.5rem 3rem;
+    font-size: .9375rem;
+  }
+  .tabs { display: none; }
+  .group + .group { margin-top: 1.75rem; }
+  .group h2 {
+    font: inherit;
+    font-size: .8125rem;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    margin: 0 0 .75rem;
+    padding-bottom: .375rem;
+    border-bottom: var(--rule);
+  }
+  .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: .25rem .75rem; padding: .3rem 0; }
+  .row label { cursor: pointer; }
+  .row input[type='range'], .row .sel { grid-column: 1 / -1; }
+  .row.toggle { grid-template-columns: 1fr auto; }
+
+  @media (max-width: 56em) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto; }
+    header { padding: 1rem 1.25rem; gap: 1rem; }
+    header nav { display: none; }
+    .views { margin-left: auto; }
+    .canvas { grid-template-columns: 1fr; }
+    .col { padding: 0 1.25rem 3rem; }
+    .col + .col { border-left: 0; border-top: var(--rule); }
+    aside {
+      grid-column: 1;
+      grid-row: 3;
+      border-left: 0;
+      border-top: var(--rule);
+      padding: 0;
+      max-height: 48dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      border-bottom: var(--rule);
+      scrollbar-width: none;
+    }
+    .tabs button { padding: .8rem 1rem; text-transform: uppercase; font-size: .8125rem; white-space: nowrap; }
+    .tabs button[aria-selected='true'] { background: var(--fg); color: var(--bg); }
+    .groups { overflow-y: auto; padding: 1rem 1.25rem 1.5rem; }
+    .group { display: none; }
+    .group.on { display: block; margin: 0; }
+    .group h2 { display: none; }
+    .groups:not(:has(.on)) { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">unjustified</span>
+  <span class="muted">lab</span>
+  <nav>
+    <button class="hl">edit text</button>
+    <a class="hl" href="./index.html" style="color:inherit;text-decoration:none">↙ prototypes</a>
+  </nav>
+  <div class="views up" style="font-size:.8125rem">
+    <button class="hl" data-view-set="a">A</button>
+    <button class="hl" data-view-set="b">B</button>
+    <button class="hl" data-view-set="ab">A+B</button>
+  </div>
+</header>
+
+<main class="canvas">
+  <section class="col" data-col="a">
+    <div class="col-head"><b>A</b><span>Browser</span><span class="num"><span data-m="a.lines">–</span> lines</span><span class="num">σ <span data-m="a.dev">–</span></span><span class="num">short <span data-m="a.short">–</span></span></div>
+    <div class="text" data-col="a"></div>
+  </section>
+  <section class="col" data-col="b">
+    <div class="col-head"><b>B</b><span>Unjustified</span><span class="num"><span data-m="b.lines">–</span> lines</span><span class="num">σ <span data-m="b.dev">–</span></span><span class="num">short <span data-m="b.short">–</span></span></div>
+    <div class="text" data-col="b"></div>
+  </section>
+</main>
+
+<aside>
+  <div class="tabs" role="tablist"></div>
+  <div class="groups"></div>
+</aside>
+
+<script type="module">
+  import { GROUPS, inputHTML, valueHTML, start } from './proto.js';
+  const groups = document.querySelector('.groups');
+  const tabs = document.querySelector('.tabs');
+  groups.innerHTML = GROUPS.map(g => `<section class="group" data-g="${g.id}"><h2>${g.label}</h2>${g.controls.map(c => c.type === 'toggle'
+    ? `<label class="row toggle"><span>${c.label}</span>${inputHTML(c)}</label>`
+    : `<div class="row"><label>${c.label}</label>${c.type === 'range' ? valueHTML(c) : '<span></span>'}${inputHTML(c)}</div>`).join('')}</section>`).join('');
+  tabs.innerHTML = GROUPS.map(g => `<button role="tab" data-tab="${g.id}" aria-selected="false">${g.label}</button>`).join('');
+  tabs.addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    const open = b.getAttribute('aria-selected') !== 'true';
+    tabs.querySelectorAll('[data-tab]').forEach(t => t.setAttribute('aria-selected', open && t === b));
+    groups.querySelectorAll('.group').forEach(g => g.classList.toggle('on', open && g.dataset.g === b.dataset.tab));
+  });
+  start(matchMedia('(max-width: 56em)').matches ? 'b' : 'ab');
+</script>
+</body>
+</html>

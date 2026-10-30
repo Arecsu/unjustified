@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab prototypes — unjustified</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { padding: 2rem clamp(1.2rem, 5vw, 2rem); max-width: 56rem; }
+  h1 { font-weight: 500; font-size: clamp(2.5rem, 8vw, 4.5rem); letter-spacing: -.02em; margin: 2rem 0; font-variation-settings: 'opsz' 32; }
+  ol { list-style: none; padding: 0; margin: 0; border-top: var(--rule); }
+  li { border-bottom: var(--rule); }
+  a { display: grid; grid-template-columns: 3rem 10rem 1fr; gap: 1rem; padding: 1rem 0; color: inherit; text-decoration: none; align-items: baseline; }
+  @media (hover: hover) { a:hover { background: var(--fg); color: var(--bg); } }
+  b { font-weight: 500; font-size: 1.5rem; }
+  @media (max-width: 40em) { a { grid-template-columns: 2rem 1fr; } a span:last-child { grid-column: 2; } }
+</style>
+</head>
+<body>
+<p class="up">unjustified / lab / round 1 · <a href="../round-2/index.html" style="display:inline;padding:0">round 2 →</a> · <a href="../index.html" style="display:inline;padding:0">all rounds ↙</a></p>
+<h1>Four ways to hold the controls.</h1>
+<ol>
+  <li><a href="./a-panel.html"><span class="num">A</span><b>Panel</b><span>Inter-lab style. Text fills the screen, one dense ruled panel on the right. Bottom sheet with group tabs on mobile.</span></a></li>
+  <li><a href="./b-toolbar.html"><span class="num">B</span><b>Toolbar</b><span>Nothing but text until you ask. A black floating bar of groups; each opens a ruled sheet above it.</span></a></li>
+  <li><a href="./c-ledger.html"><span class="num">C</span><b>Ledger</b><span>The site's label gutter. Every control visible at once as a ruled sheet; a black strip of values follows you down.</span></a></li>
+  <li><a href="./d-scrub.html"><span class="num">D</span><b>Scrub</b><span>No sliders. Parameters read as lines of values you drag sideways; the column's edge sets its width.</span></a></li>
+</ol>
+</body>
+</html>

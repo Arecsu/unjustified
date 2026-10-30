@@ -1,0 +1,210 @@
+/* Round 2 base. Self-contained: nothing outside this folder reads it. */
+@font-face {
+  font-family: InterVariable;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../fonts/InterVariable.woff2') format('woff2');
+}
+@font-face {
+  font-family: InterVariable;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../../fonts/InterVariable-Italic.woff2') format('woff2');
+}
+
+:root {
+  --bg: #e8e6e3;
+  --fg: #000;
+  --fg-2: #77756f;
+  --fg-3: #aeaeae;
+  --paper: #fbfbfb;
+  --rule: 1px solid var(--fg);
+  --hair: 1px solid color-mix(in srgb, var(--fg) 18%, transparent);
+  --margin: clamp(1.25rem, 5vw, 2rem);
+
+  --size: 19px;
+  --ls: 0em;
+  --measure: 390px;
+  --font: 'Source Serif 4 Variable', Georgia, serif;
+  --hyphens: manual;
+  --rag: 5.5;
+  /* Underline colour of scrub values. A real colour, not currentColor: the ink copy's
+     own text is transparent. Inherited, so a cell or bar can set it for its values. */
+  --ink: var(--fg);
+
+  font-family: InterVariable, sans-serif;
+  font-feature-settings: 'calt';
+  font-variation-settings: 'opsz' 16;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-tap-highlight-color: transparent;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+button, select, input { font: inherit; color: inherit; }
+button { background: none; border: 0; padding: 0; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
+a { color: inherit; text-decoration: none; }
+::selection { background: color-mix(in srgb, var(--fg) 22%, transparent); }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+.up { text-transform: uppercase; }
+.num { font-feature-settings: 'cv04', 'tnum', 'calt'; }
+.muted { color: var(--fg-2); }
+
+/* Black block on hover/press, as on the site. */
+.hl { padding: 0 .2em; margin: 0 -.2em; }
+@media (hover: hover) and (pointer: fine) { .hl:hover { background: var(--fg); color: var(--bg); } }
+@media (pointer: coarse) { .hl:active { background: var(--fg); color: var(--bg); } }
+.hl[aria-pressed='true'] { background: var(--fg); color: var(--bg); }
+
+.brand { display: flex; gap: 1rem; align-items: baseline; }
+.brand b { font-weight: 500; }
+
+/* ---------------------------------------------------------------------------
+   Scrub value. A real underline, so the browser skips descenders; a second copy
+   of the text, transparent, carries the solid part and is clipped to progress.
+   --------------------------------------------------------------------------- */
+.tok {
+  position: relative;
+  display: inline-block;
+  white-space: nowrap;
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
+.tok[data-type='toggle'], .tok[data-type='select'] { cursor: pointer; }
+.tok .t, .tok .ink {
+  text-decoration-line: underline;
+  text-decoration-thickness: .1em;
+  text-underline-offset: .16em;
+  text-decoration-skip-ink: auto;
+}
+.tok .t { text-decoration-color: color-mix(in srgb, var(--ink) 22%, transparent); }
+.tok .ink {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  text-decoration-color: var(--ink);
+  clip-path: inset(-1em calc((1 - var(--p, 0)) * 100%) -1em 0);
+  pointer-events: none;
+}
+.tok .ink * { color: transparent !important; }
+.tok i { font-style: normal; color: var(--fg-2); margin-right: .35em; }
+.tok[data-type='toggle'][aria-pressed='false'] output { color: var(--fg-3); }
+.tok select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.tok .arrow { margin-left: .2em; }
+@media (hover: hover) and (pointer: fine) {
+  .tok:hover { background: var(--fg); color: var(--bg); --ink: var(--bg); }
+  .tok:hover i { color: var(--fg-3); }
+}
+.tok.drag { background: var(--fg); color: var(--bg); --ink: var(--bg); }
+.tok.drag i { color: var(--fg-3); }
+
+/* ---------------------------------------------------------------------------
+   Cell: a ruled rectangle. The whole cell is the control.
+   --------------------------------------------------------------------------- */
+.cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--cell-min, 9.5rem), 1fr)); padding: .5px; }
+.cell {
+  position: relative;
+  outline: 1px solid var(--fg);
+  outline-offset: -.5px;
+  padding: .55rem .7rem .6rem;
+  min-height: 4.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: .4rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cell .lbl { font-size: .8125rem; text-transform: uppercase; padding-right: 1.25rem; }
+.cell { min-width: 0; overflow: hidden; }
+.cell .val { font-size: 1.25rem; white-space: nowrap; }
+.cell[data-type='select'] .val { font-size: 1rem; }
+.cell[data-type='range'] { cursor: ew-resize; touch-action: pan-y; }
+.cell[data-type='range'] .tok { cursor: inherit; }
+.cell .box { position: absolute; top: .65rem; right: .7rem; width: .875rem; height: .875rem; border: var(--rule); }
+.cell[aria-pressed='true'] .box { background: var(--fg); }
+.cell select { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+@media (hover: hover) and (pointer: fine) {
+  .cell:hover { background: var(--paper); }
+  .cell:hover .tok { background: none; color: inherit; --ink: var(--fg); }
+  .cell:hover .tok i { color: var(--fg-2); }
+}
+.cell.drag { background: var(--fg); color: var(--bg); --ink: var(--bg); }
+.cell.drag .box { border-color: var(--bg); }
+
+/* ---------------------------------------------------------------------------
+   The two columns. Always side by side; the row scrolls sideways when narrow.
+   --------------------------------------------------------------------------- */
+.pair {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  column-gap: 4rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--margin);
+  padding-inline: var(--margin);
+  scrollbar-width: thin;
+}
+[data-view='a'] .col[data-col='b'], [data-view='b'] .col[data-col='a'] { display: none; }
+.col { scroll-snap-align: start; padding-bottom: 3rem; }
+.col:last-child { padding-right: var(--margin); }
+.col-head {
+  width: var(--measure);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: .8125rem;
+  text-transform: uppercase;
+  border-bottom: var(--rule);
+  padding-bottom: .4rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+@media (max-width: 40em) { .pair { column-gap: 2.5rem; } }
+.col-head .m { text-transform: none; color: var(--fg-2); }
+.frame { position: relative; width: fit-content; }
+/* Width handle: on the first visible column's right edge, so it follows the pointer. */
+.handle {
+  position: absolute;
+  top: -.5rem;
+  bottom: -.5rem;
+  right: -2rem;
+  width: 1.5rem;
+  translate: 50% 0;
+  cursor: col-resize;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+}
+[data-view='ab'] .col[data-col='b'] .handle { display: none; }
+.handle::before { content: ''; position: absolute; inset: 0 auto 0 50%; border-left: 1px dashed var(--fg); }
+.handle span { position: relative; background: var(--bg); padding: .25rem 0; font-size: .8125rem; }
+@media (hover: hover) { .handle:hover::before { border-left-style: solid; } }
+
+/* The composed text. B stands in for the optimizer with text-wrap: pretty. */
+.text {
+  font: 400 var(--size)/1.55 var(--font);
+  letter-spacing: var(--ls);
+  width: var(--measure);
+  hyphens: var(--hyphens);
+  -webkit-hyphens: var(--hyphens);
+  text-wrap: wrap;
+  font-optical-sizing: auto;
+  outline: none;
+}
+.text p { margin: 0 0 1.25em; }
+.text p:last-child { margin-bottom: 0; }
+.text[data-col='b'] { text-wrap: pretty; }
+.text[contenteditable='true'] { box-shadow: 0 0 0 .75rem var(--paper); background: var(--paper); }
+.justify-b .text[data-col='b'], .justify-a .text[data-col='a'] { text-align: justify; }
+.guides .text {
+  background: repeating-linear-gradient(transparent 0 calc(var(--size) * 1.55 - 1px), color-mix(in srgb, var(--fg) 14%, transparent) 0 calc(var(--size) * 1.55));
+}
+.diag .text { box-shadow: inset calc(var(--measure) * var(--rag) / -100) 0 0 color-mix(in srgb, var(--fg) 7%, transparent); }

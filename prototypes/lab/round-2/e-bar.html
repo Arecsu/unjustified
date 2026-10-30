@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>E · Value bar — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body { min-height: 100dvh; padding-bottom: 14rem; }
+  header { display: flex; align-items: baseline; gap: 1rem; padding: 1.25rem var(--margin) 4.5rem; }
+  header .sp { margin-left: auto; font-size: .8125rem; text-transform: uppercase; display: flex; gap: 1rem; }
+
+  /* The bar holds the values themselves: pick a group, drag its values in place. */
+  .bar {
+    position: fixed;
+    left: 50%;
+    bottom: 1.5rem;
+    translate: -50% 0;
+    z-index: 3;
+    width: min(50rem, calc(100vw - 2rem));
+    background: var(--fg);
+    color: var(--bg);
+    --fg-2: #8d8b86;
+    --fg-3: #5d5c59;
+  }
+  .bar .tok { --ink: var(--bg); }
+  .bar .tabs { display: flex; font-size: .8125rem; text-transform: uppercase; border-bottom: 1px solid #333; overflow-x: auto; scrollbar-width: none; }
+  .bar .tabs button { padding: .6rem .9rem; white-space: nowrap; color: var(--fg-2); }
+  .bar .tabs button[aria-pressed='true'] { color: var(--bg); box-shadow: inset 0 -2px var(--bg); }
+  .bar .tabs .views { margin-left: auto; display: flex; border-left: 1px solid #333; }
+  .bar .tabs .views button[aria-pressed='true'] { background: var(--bg); color: var(--fg); box-shadow: none; }
+  .bar .line {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 1.75rem;
+    row-gap: .5rem;
+    padding: .85rem 1rem 1rem;
+    font-size: 1.0625rem;
+    line-height: 1.6rem;
+    min-height: 3.45rem;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .bar .tok:hover { background: var(--bg); color: var(--fg); --ink: var(--fg); }
+    .bar .tok:hover i { color: #77756f; }
+  }
+  .bar .tok.drag { background: var(--bg); color: var(--fg); --ink: var(--fg); }
+
+  .hviews { display: none; gap: .75rem; }
+  @media (max-width: 56em) {
+    header { padding-bottom: 2.5rem; }
+    .hviews { display: flex; }
+    .bar .tabs .views { display: none; }
+    .bar { left: 0; bottom: 0; translate: none; width: 100%; padding-bottom: env(safe-area-inset-bottom); }
+    .bar .line { column-gap: 1.3rem; padding-inline: var(--margin); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>unjustified</b><span class="muted">lab</span><a class="hl" href="./index.html">↙</a></div>
+  <span class="sp"><span class="hviews"><button class="hl" data-view-set="a">A</button> <button class="hl" data-view-set="b">B</button> <button class="hl" data-view-set="ab">A+B</button></span><button class="hl" data-edit>edit text</button></span>
+</header>
+<main id="canvas"></main>
+
+<nav class="bar num">
+  <div class="tabs"><div class="groups" style="display:flex"></div><div class="views"><button data-view-set="a">A</button><button data-view-set="b">B</button><button data-view-set="ab">A+B</button></div></div>
+  <div class="line"></div>
+</nav>
+
+<script type="module">
+  import { GROUPS, tokHTML, pairHTML, start } from './proto.js';
+  document.querySelector('#canvas').innerHTML = pairHTML();
+  const groups = document.querySelector('.bar .groups');
+  const line = document.querySelector('.bar .line');
+  const show = id => {
+    groups.innerHTML = GROUPS.map(g => `<button data-g="${g.id}" aria-pressed="${g.id === id}">${g.label}</button>`).join('');
+    line.innerHTML = GROUPS.find(g => g.id === id).controls.map(c => tokHTML(c)).join('');
+  };
+  show('edge');
+  groups.addEventListener('click', e => { const b = e.target.closest('[data-g]'); if (b) show(b.dataset.g); });
+  start('ab');
+</script>
+</body>
+</html>

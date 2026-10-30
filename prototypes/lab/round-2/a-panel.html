@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A2 · Panel of cells — unjustified lab</title>
+<link rel="stylesheet" href="./proto.css">
+<style>
+  body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 23rem;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: 100dvh;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 1.25rem;
+    padding: 1.25rem var(--margin);
+    border-bottom: var(--rule);
+  }
+  header .sp { margin-left: auto; display: flex; gap: 1rem; font-size: .8125rem; text-transform: uppercase; }
+  main { overflow-y: auto; padding-top: 1.75rem; }
+
+  aside {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    border-left: var(--rule);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding: 1.25rem 1.25rem 3rem;
+  }
+  .tabs { display: none; }
+  .group + .group { margin-top: 1.75rem; }
+  .group h2 { font: inherit; font-size: .8125rem; text-transform: uppercase; margin: 0 0 .75rem; }
+  .cells { --cell-min: 9.5rem; }
+
+  @media (max-width: 56em) {
+    body { grid-template-columns: 1fr; height: auto; display: block; }
+    header .sp .edit, header .sp .muted { display: none; }
+    main { padding-bottom: 5rem; }
+    /* The bar never moves; the sheet opens above it, over the text. */
+    aside {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 3;
+      padding: 0;
+      border-left: 0;
+      overflow: visible;
+    }
+    .tabs {
+      display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
+      background: var(--bg);
+      border-top: var(--rule);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .tabs button { padding: .9rem 1rem; text-transform: uppercase; font-size: .8125rem; white-space: nowrap; }
+    .tabs button[aria-selected='true'], .tabs button[aria-pressed='true'] { background: var(--fg); color: var(--bg); }
+    .groups {
+      position: absolute;
+      left: 0; right: 0; bottom: 100%;
+      max-height: 55dvh;
+      overflow-y: auto;
+      background: var(--bg);
+      border-top: var(--rule);
+      padding: 1rem var(--margin) 1.25rem;
+    }
+    .groups:not(:has(.on)) { display: none; }
+    .group { display: none; }
+    .group.on { display: block; margin: 0; }
+    .cells { --cell-min: 8.5rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><b>unjustified</b><span class="muted">lab</span><a class="hl" href="./index.html">↙</a></div>
+  <div class="sp">
+    <button class="hl edit" data-edit>edit text</button>
+    <span class="muted">·</span>
+    <button class="hl" data-view-set="a">A</button><button class="hl" data-view-set="b">B</button><button class="hl" data-view-set="ab">A+B</button>
+  </div>
+</header>
+<main id="canvas"></main>
+<aside>
+  <div class="groups"></div>
+  <div class="tabs" role="tablist"></div>
+</aside>
+
+<script type="module">
+  import { GROUPS, cellHTML, pairHTML, start } from './proto.js';
+  document.querySelector('#canvas').innerHTML = pairHTML();
+  const groups = document.querySelector('.groups');
+  const tabs = document.querySelector('.tabs');
+  groups.innerHTML = GROUPS.map(g => `<section class="group" data-g="${g.id}"><h2>${g.label}</h2><div class="cells">${g.controls.map(cellHTML).join('')}</div></section>`).join('');
+  tabs.innerHTML = GROUPS.map(g => `<button role="tab" data-tab="${g.id}" aria-selected="false">${g.label}</button>`).join('') + '<button data-edit>Edit</button>';
+  tabs.addEventListener('click', e => {
+    const b = e.target.closest('[data-tab]');
+    if (!b) return;
+    const open = b.getAttribute('aria-selected') !== 'true';
+    tabs.querySelectorAll('[data-tab]').forEach(t => t.setAttribute('aria-selected', open && t === b));
+    groups.querySelectorAll('.group').forEach(g => g.classList.toggle('on', open && g.dataset.g === b.dataset.tab));
+  });
+  start('ab');
+</script>
+</body>
+</html>
