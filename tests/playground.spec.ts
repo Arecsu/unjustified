@@ -287,3 +287,54 @@ test('full edge firmness pulls body lines nearly flush without overflowing', asy
   });
   expect(spill).toBeLessThan(0.5);
 });
+
+test('word spacing flex evens Arabic lines with tracking locked at zero', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.locator('#language').selectOption('ar');
+  await settled(page);
+  const bodyFills = () => page.evaluate(() => (window as any).__composition.result.paragraphs
+    .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
+  await setRange(page, 'rag', 0);
+  await setRange(page, 'firmness', 100);
+  const ragged = Math.min(...await bodyFills());
+  await setRange(page, 'word-spacing', 50);
+  await expect(page.locator('#word-spacing-value')).toHaveText('50%');
+  // Arabic lines have few spaces, so 50 % flex narrows the rag rather than
+  // closing it; the shortest body line must still get longer.
+  expect(Math.min(...await bodyFills())).toBeGreaterThan(ragged);
+  const geometry = await page.evaluate(() => {
+    const models = (window as any).__composition.result.paragraphs.flatMap((p: any) => p.lines);
+    const rendered = [...document.querySelectorAll('#optimized .composed-line')];
+    const column = document.querySelector('#optimized')!.getBoundingClientRect();
+    return {
+      error: Math.max(...rendered.map((el, i) => Math.abs(el.querySelector('.line-text')!.getBoundingClientRect().width - models[i].width))),
+      spill: Math.max(...rendered.map(el => column.left - el.querySelector('.line-text')!.getBoundingClientRect().left)),
+      tracking: Math.max(...models.map((l: any) => Math.abs(l.tracking))),
+      spaced: models.some((l: any) => l.wordSpacing !== 0),
+    };
+  });
+  expect(geometry.error).toBeLessThan(0.3);
+  // RTL: lines grow leftwards, so spill shows as text left of the column.
+  expect(geometry.spill).toBeLessThan(0.5);
+  expect(geometry.tracking).toBe(0);
+  expect(geometry.spaced).toBe(true);
+  // Native copy is still the original text.
+  const expected = await page.locator('#baseline p').allTextContents();
+  await page.evaluate(() => {
+    const range = document.createRange(); range.selectNodeContents(document.querySelector('#optimized')!);
+    getSelection()!.removeAllRanges(); getSelection()!.addRange(range);
+  });
+  await page.keyboard.press('ControlOrMeta+c');
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected.join('\n\n'));
+});
+
+test('word spacing flex is disabled for all-Japanese text', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await expect(page.locator('#word-spacing')).toBeEnabled();
+  await page.locator('#language').selectOption('ja');
+  await settled(page);
+  await expect(page.locator('#word-spacing')).toBeDisabled();
+  await expect(page.locator('#word-spacing-note')).toContainText('no word spaces');
+});

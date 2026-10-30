@@ -2,6 +2,7 @@ const ranges = {
   'font-size': ['Type size', 14, 26, 19, ' px', 'Small|Large', 1],
   measure: ['Column width', 240, 620, 390, ' px', 'Narrow|Wide', 2],
   rag: ['Room for the rag', 0, 18, 5.5, '%', 'Tighter|Looser', 0.5],
+  'word-spacing': ['Word spacing flex', 0, 50, 0, '%', 'Fixed|Flexible', 5],
   firmness: ['Edge firmness', 0, 100, 0, '%', 'Ragged|Nearly flush', 5],
   sync: ['Paragraph harmony', 0, 100, 65, '%', 'Independent|In concert', 5],
   ending: ['Minimum last line', 15, 60, 32, '%', 'A little|A little more', 1],

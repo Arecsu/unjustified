@@ -10,7 +10,7 @@ import type { Typeface } from './fonts';
 import type { ComposeRequest, ComposeResponse, WorkerResponse } from './protocol';
 import { compose, metrics, wordsOf } from './optimizer';
 import type { Composition, Layout, Settings } from './optimizer';
-import { detectLanguage, directionFor, normalizeText, hasArabic } from './language';
+import { detectLanguage, directionFor, normalizeText, hasArabic, segmentText } from './language';
 import type { DirectionPolicy } from './language';
 import { readNativeLayout } from './native-layout';
 import { annotateParagraph, bindInspection, cssRem, renderOptimized, renderBaselineGuides } from './rendering';
@@ -32,7 +32,7 @@ const MAX_CHARACTERS = 30000;
  */
 const RESERVE_NATIVE_HEIGHT = false;
 
-const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, protectEndings: true } satisfies Settings;
+const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, protectEndings: true } satisfies Settings;
 let settings: Settings = { ...defaults };
 let paragraphs = samples.editorial.split('\n\n');
 let typeface: Typeface = 'serif';
@@ -81,6 +81,11 @@ function updateScriptUI() {
   $('#tracking-note').textContent = paragraphs.some(hasArabic)
     ? 'Arabic paragraphs keep natural connected shaping: tracking is held at zero. Other paragraphs use these limits.'
     : 'Independent shrink and expansion limits. Set either handle to zero to disable that direction.';
+  const noSpaces = paragraphs.every(text => segmentText(text).separator === '');
+  $<HTMLInputElement>('#word-spacing').disabled = noSpaces;
+  $('#word-spacing-note').textContent = noSpaces
+    ? 'Japanese has no word spaces; tracking handles its edge.'
+    : 'How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.';
   const lang = detectLanguage(paragraphs.join(' '));
   if (!fontLanguages[typeface].includes(lang)) {
     typeface = lang === 'ja' ? 'japanese' : lang === 'ar' ? 'arabic' : 'serif';
@@ -378,12 +383,14 @@ function inspect(p: number, l: number) {
   const line = current.paragraphs[p]?.lines[l]; if (!line) return;
   optEl.querySelectorAll('.inspected').forEach(el => el.classList.remove('inspected'));
   optEl.querySelector(`[data-paragraph="${p}"][data-line="${l}"]`)?.classList.add('inspected');
-  $('#line-inspector').innerHTML = `<span class="inspector-label">¶ ${p + 1} / LINE ${l + 1}</span><span>${Math.round(line.width)} px <i>of ${Math.round(lastWidth)}</i></span><span>${(line.fill * 100).toFixed(1)}% fill</span><strong>${line.tracking >= 0 ? '+' : ''}${line.tracking.toFixed(4)} em</strong>`;
+  $('#line-inspector').innerHTML = `<span class="inspector-label">¶ ${p + 1} / LINE ${l + 1}</span><span>${Math.round(line.width)} px <i>of ${Math.round(lastWidth)}</i></span><span>${(line.fill * 100).toFixed(1)}% fill</span><strong>${line.tracking >= 0 ? '+' : ''}${line.tracking.toFixed(4)} em</strong>${line.wordSpacing ? `<span>words ${line.wordSpacing >= 0 ? '+' : '−'}${Math.abs(line.wordSpacing).toFixed(3)} em</span>` : ''}`;
 }
 const controls: Record<string, { key: keyof Settings; factor: number; unit: string }> = {
   'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, measure: { key: 'width', factor: 1, unit: ' px' },
   'tracking-min': { key: 'trackingMin', factor: 1, unit: ' em' }, 'tracking-max': { key: 'trackingMax', factor: 1, unit: ' em' },
-  rag: { key: 'rag', factor: .01, unit: '%' }, firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
+  rag: { key: 'rag', factor: .01, unit: '%' },
+  'word-spacing': { key: 'wordSpacing', factor: .01, unit: '%' },
+  firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
 };
 function formatControl(id: string, value: number, unit: string) {
   return id.startsWith('tracking-') ? `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(3)}${unit}` : `${value}${unit}`;
@@ -490,7 +497,7 @@ function toast(text: string) { $('#toast').textContent = text; $('#toast').hidde
 $('#export').addEventListener('click', () => {
   if (!current) return;
   const escape = (text: string) => text.replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}span{display:inline-block;width:100%;white-space:pre;line-height:1.55}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}span{display:inline;white-space:normal;letter-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${l.tracking}em">${escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
+  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}span{display:inline-block;width:100%;white-space:pre;line-height:1.55}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${l.tracking}em;word-spacing:${l.wordSpacing}em">${escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   const a = document.createElement('a'); a.href = url; a.download = 'unjustified.html'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000); toast('HTML snapshot exported. System-font fallback can change geometry.');

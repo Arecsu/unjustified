@@ -85,7 +85,7 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
         + ` style="letter-spacing:${line.tracking}em;--line-width:${cssRem(line.width, root)}"`
         + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
         + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
-        + `<span class="line-text">${inner}</span>${trailing}${guide}</span>`);
+        + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}${guide}</span>`);
     });
     const reserve = options.reservePixels?.[pIndex];
     const style = reserve ? ` style="min-height:${reserve.toFixed(2)}px"` : '';
