@@ -169,6 +169,11 @@
   font-size: inherit;
   line-height: 0;
 }
+.kashida {
+  /* Visual only: copying returns the text as written, without tatweels. */
+  user-select: none;
+  -webkit-user-select: none;
+}
 .is-recomposing .composed-line {
   /* While a resize is being recomposed, stale line boxes must not spill out of
      the narrower column. Removed as soon as the new composition is painted. */

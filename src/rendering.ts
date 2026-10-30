@@ -1,6 +1,7 @@
 import type { Layout } from './optimizer';
 import { detectLanguage, directionFor, segmentText, hasArabic } from './language';
 import type { DirectionPolicy } from './language';
+import { placeKashida, splitAtSite, TATWEEL } from './kashida';
 
 /**
  * Root font size is read once per render instead of once per line: calling
@@ -35,6 +36,15 @@ export interface RenderOptions {
 }
 
 /**
+ * A word with its tatweels as a separate, unselectable span: the letters stay
+ * joined across it (research/SPIKES.md) and native copy returns the original word.
+ */
+export function kashidaHtml(word: string, count: number): string {
+  const [before, after] = splitAtSite(word);
+  return `${escapeHtml(before)}<span class="kashida" aria-hidden="true">${TATWEEL.repeat(count)}</span>${escapeHtml(after)}`;
+}
+
+/**
  * Render the composed lines as real, selectable text. One inline-block per line
  * forces the chosen breaks; the words inside a line stay plain text unless
  * "highlight moved words" asks for per-word spans.
@@ -64,14 +74,16 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
     const lines: string[] = [];
     layout.lines.forEach((line, lineIndex) => {
       let inner = '';
+      const tatweels = line.kashida ? placeKashida(units.slice(line.start, line.end), line.kashida) : undefined;
       for (let i = line.start; i < line.end; i++) {
         const unit = i === line.end - 1 ? units[i].trimEnd() : units[i];
         if (i > line.start) inner += escapeHtml(separator);
+        const word = tatweels?.[i - line.start] ? kashidaHtml(unit, tatweels[i - line.start]) : escapeHtml(unit);
         if (highlight) {
           const moved = unitLine![i] !== lineIndex ? ' class="moved-word"' : '';
-          inner += `<span${moved}>${escapeHtml(unit)}</span>`;
+          inner += `<span${moved}>${word}</span>`;
         } else {
-          inner += escapeHtml(unit);
+          inner += word;
         }
       }
       // Native copy: preserve source separators inside inline boxes, not block

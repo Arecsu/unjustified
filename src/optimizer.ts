@@ -19,6 +19,7 @@ import { trackingAdvances } from './text-metrics';
 import { segmentText, hasArabic } from './language';
 import { fitMeasure, shareGap } from './stretch';
 import type { Tool } from './stretch';
+import { bestSite, TATWEEL } from './kashida';
 
 export interface Settings {
   width: number;
@@ -34,6 +35,8 @@ export interface Settings {
   /** 0–0.5. How far each inter-word space may shrink or stretch, as a fraction
    *  of its natural width. 0 disables word-spacing adjustment. */
   wordSpacing?: number;
+  /** 0–4. Most tatweels a line of Arabic may receive. 0 disables kashida. */
+  kashida?: number;
   protectEndings: boolean;
 }
 
@@ -45,6 +48,8 @@ export interface Line {
   width: number;
   tracking: number; // em
   wordSpacing: number; // em added to (or removed from) each inter-word space
+  kashida: number; // tatweels inserted into this line (Arabic only)
+  kashidaWidth: number; // their total advance, px
   fill: number;
   overflow: boolean;
 }
@@ -73,16 +78,21 @@ const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
  *  unit of fill it costs about 2.5× less in ordinary English text. */
 const TRACKING_STIFFNESS = 1000;
 const WORD_STIFFNESS = 10;
-/** Reused by every `buildLine` call: the candidate loop runs it ~10⁵ times. */
-const tools: Tool[] = [{ k: 0, b: 0, min: 0, max: 0 }, { k: 0, b: 0, min: 0, max: 0 }];
-const amounts = new Float64Array(2);
+/** Kashida sits between the two: with ~6 spaces in an Arabic line it costs
+ *  about 1.8× word spacing per unit of fill. */
+const KASHIDA_STIFFNESS = 0.5;
+/** Reused by every `buildLine` call: the candidate loop runs it ~10⁵ times.
+ *  Loosest first: word spacing, kashida (in tatweels), tracking. */
+const tools: Tool[] = [0, 1, 2].map(() => ({ k: 0, b: 0, min: 0, max: 0 }));
+const amounts = new Float64Array(3);
 
 export const wordsOf = (text: string): string[] => text.trim().split(/\s+/u).filter(Boolean);
 
 function lineCost(line: Line, final: boolean, only: boolean, settings: Settings): number {
   if (line.overflow) return 500 + square(line.fill - 1) * 100;
   const track = 0.10 * restraint(settings) * square(line.tracking / 0.01)
-    + (line.wordSpacing !== 0 ? WORD_STIFFNESS * restraint(settings) * square(line.wordSpacing) : 0);
+    + (line.wordSpacing !== 0 ? WORD_STIFFNESS * restraint(settings) * square(line.wordSpacing) : 0)
+    + (line.kashida !== 0 ? KASHIDA_STIFFNESS * restraint(settings) * square(line.kashidaWidth / settings.fontSize) : 0);
   if (only) return track;
   if (final) {
     // Short endings are a soft constraint: impossible cases remain renderable.
@@ -100,21 +110,26 @@ function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): 
   // Keep line-to-line tracking changes subtle. Final lines are allowed to relax.
   return 0.035 * restraint(s) * square((a.tracking - b.tracking) / 0.01)
     + (a.wordSpacing !== b.wordSpacing ? 0.35 * WORD_STIFFNESS * restraint(s) * square(a.wordSpacing - b.wordSpacing) : 0)
+    + (a.kashida !== b.kashida ? 0.35 * KASHIDA_STIFFNESS * restraint(s) * square((a.kashidaWidth - b.kashidaWidth) / s.fontSize) : 0)
     + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12));
 }
 
 /** Build one candidate line from an already-measured natural width. */
 function buildLine(start: number, end: number, text: string, natural: number, advances: number,
-  totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceLimit = 0): Line | null {
+  totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceLimit = 0,
+  kashidaLimit = 0, tatweel = 0): Line | null {
   // CSS tracking contributes a trailing advance too. Japanese uses grapheme
   // advances; connected Arabic paragraphs have their tracking bounds set to zero.
   const naturalFill = natural / s.width;
   const final = end === totalWords;
   const only = start === 0 && final;
-  let tracking = 0, wordSpacing = 0;
+  let tracking = 0, wordSpacing = 0, kashida = 0;
   if (tracked && !only) {
-    // Loosest first: word spacing, then tracking. Each moves fill by k per em.
-    const words = tools[0], track = tools[1];
+    // Each tool moves fill by k per unit: em for spacing, one tatweel for kashida.
+    const words = tools[0], kash = tools[1], track = tools[2];
+    kash.k = tatweel / s.width;
+    kash.b = KASHIDA_STIFFNESS * restraint(s) * square(tatweel / s.fontSize);
+    kash.min = 0; kash.max = kashidaLimit;
     words.k = spaces * s.fontSize / s.width;
     words.b = WORD_STIFFNESS * restraint(s);
     words.min = -spaceLimit; words.max = spaceLimit;
@@ -124,16 +139,26 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     const target = final ? s.minEnding : 1 - s.rag;
     const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
     shareGap(target - naturalFill, a, tools, amounts);
+    if (amounts[1] !== 0) {
+      // Tatweels are whole glyphs: round, pin, and let the other tools absorb the rest.
+      const count = Math.round(amounts[1]);
+      kash.min = kash.max = count;
+      if (count !== amounts[1]) shareGap(target - naturalFill, a, tools, amounts);
+    }
     // Use bounded negative adjustment to admit a word that just barely doesn't fit.
     fitMeasure(naturalFill, tools, amounts);
     wordSpacing = amounts[0];
-    tracking = amounts[1];
+    kashida = amounts[1];
+    tracking = amounts[2];
   }
   let width = natural + advances * tracking * s.fontSize;
   if (wordSpacing !== 0) width += spaces * wordSpacing * s.fontSize;
+  const kashidaWidth = kashida * tatweel;
+  if (kashida !== 0) width += kashidaWidth;
   const overflow = width > s.width + 0.05;
   if (overflow && end - start > 1) return null;
-  return { start, end, text, natural, width, tracking, wordSpacing, fill: width / s.width, overflow };
+  return { start, end, text, natural, width, tracking, wordSpacing, kashida, kashidaWidth,
+    fill: width / s.width, overflow };
 }
 
 /** Grapheme advances are immutable per string; the candidate loop asks often. */
@@ -324,6 +349,11 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   const spaceWidth = separator ? measure(separator) : 0;
   // Word-spacing bound in em. Japanese has no separator, so no spaces to adjust.
   const spaceLimit = (s.wordSpacing ?? 0) * spaceWidth / s.fontSize;
+  // Kashida: which words can take a tatweel, as a prefix count per line range.
+  const kashidaLimit = s.kashida && hasArabic(text) ? s.kashida : 0;
+  const tatweel = kashidaLimit ? measure(TATWEEL) : 0;
+  const sitePrefix = new Int32Array(total + 1);
+  if (kashidaLimit) for (let i = 0; i < total; i++) sitePrefix[i + 1] = sitePrefix[i] + (bestSite(words[i]) ? 1 : 0);
 
   const paths: number[][] = Array.from({ length: total + 1 }, () => []);
   const pool = new PathPool(1024 + beam * 24);
@@ -357,7 +387,9 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
       const trackingPx = advances * s.fontSize;
       const spacingPx = spaceLimit > 0 ? spaceLimit * spaces * s.fontSize : 0;
       const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + spacingPx;
-      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - spacingPx;
+      const lineKashida = kashidaLimit && sitePrefix[end] > sitePrefix[start] ? kashidaLimit : 0;
+      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - spacingPx
+        - (lineKashida ? lineKashida * tatweel : 0);
       if (estimate > longest) {
         // Beyond the overflow threshold, a longer line can only overflow further.
         if (end - start > 1) break;
@@ -365,7 +397,8 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         // Cannot reach the 0.50 fill floor that the search requires.
         continue;
       }
-      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceLimit);
+      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceLimit,
+        lineKashida, tatweel);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       const cost = lineCost(line, final, start === 0 && final, s);

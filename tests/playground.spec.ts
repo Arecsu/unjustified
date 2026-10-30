@@ -338,3 +338,49 @@ test('word spacing flex is disabled for all-Japanese text', async ({ page }) => 
   await expect(page.locator('#word-spacing')).toBeDisabled();
   await expect(page.locator('#word-spacing-note')).toContainText('no word spaces');
 });
+
+test('kashida stretches Arabic joins without changing the copied text', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.goto('/');
+  await page.locator('#language').selectOption('ar');
+  await settled(page);
+  await expect(page.locator('#kashida')).toBeEnabled();
+  const bodyFills = () => page.evaluate(() => (window as any).__composition.result.paragraphs
+    .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
+  await setRange(page, 'rag', 0);
+  await setRange(page, 'firmness', 100);
+  const ragged = Math.min(...await bodyFills());
+  await setRange(page, 'kashida', 4);
+  expect(Math.min(...await bodyFills())).toBeGreaterThan(ragged);
+  const geometry = await page.evaluate(() => {
+    const models = (window as any).__composition.result.paragraphs.flatMap((p: any) => p.lines);
+    const rendered = [...document.querySelectorAll('#optimized .composed-line')];
+    const column = document.querySelector('#optimized')!.getBoundingClientRect();
+    return {
+      error: Math.max(...rendered.map((el, i) => Math.abs(el.querySelector('.line-text')!.getBoundingClientRect().width - models[i].width))),
+      spill: Math.max(...rendered.map(el => column.left - el.querySelector('.line-text')!.getBoundingClientRect().left)),
+      modelled: models.reduce((n: number, l: any) => n + l.kashida, 0),
+      rendered: [...document.querySelectorAll('#optimized .kashida')].reduce((n, el) => n + (el.textContent ?? '').length, 0),
+    };
+  });
+  expect(geometry.modelled).toBeGreaterThan(0);
+  expect(geometry.rendered).toBe(geometry.modelled);
+  expect(geometry.error).toBeLessThan(0.3);
+  expect(geometry.spill).toBeLessThan(0.5);
+  const expected = await page.locator('#baseline p').allTextContents();
+  await page.evaluate(() => {
+    const range = document.createRange(); range.selectNodeContents(document.querySelector('#optimized')!);
+    getSelection()!.removeAllRanges(); getSelection()!.addRange(range);
+  });
+  await page.keyboard.press('ControlOrMeta+c');
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  expect(copied).not.toContain('ـ');
+  expect(copied).toBe(expected.join('\n\n'));
+});
+
+test('kashida is disabled without Arabic text', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await expect(page.locator('#kashida')).toBeDisabled();
+  await expect(page.locator('#kashida-note')).toContainText('Arabic text only');
+});

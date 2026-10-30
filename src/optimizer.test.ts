@@ -5,6 +5,7 @@ import type { Settings } from './optimizer';
 import { trackingAdvances } from './text-metrics';
 import { segmentText, directionFor } from './language';
 import { samples } from './samples';
+import { placeKashida } from './kashida';
 
 const settings: Settings = {
   width: 240, fontSize: 16, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055,
@@ -209,4 +210,34 @@ test('word spacing works on Arabic while its tracking stays locked at zero', () 
   const lines = compose(arabic, measure, s).paragraphs.flatMap(p => p.lines);
   assert.ok(lines.some(line => line.wordSpacing !== 0));
   for (const line of lines) assert.equal(line.tracking, 0);
+});
+
+test('kashida at zero changes nothing', () => {
+  const arabic = samples.arabic.split('\n\n');
+  assert.deepEqual(compose(arabic, measure, { ...settings, kashida: 0 }), compose(arabic, measure, settings));
+});
+
+test('kashida evens Arabic lines with whole tatweels, only where a word can take one', () => {
+  const arabic = samples.arabic.split('\n\n');
+  const flat = { ...settings, rag: 0, firmness: 1 };
+  const before = metrics(compose(arabic, measure, flat).paragraphs, flat);
+  const stretched = { ...flat, kashida: 4 };
+  const result = compose(arabic, measure, stretched);
+  const after = metrics(result.paragraphs, stretched);
+  assert.ok(after.deviation < before.deviation, `${after.deviation} vs ${before.deviation}`);
+  const lines = result.paragraphs.flatMap(p => p.lines);
+  assert.ok(lines.some(line => line.kashida > 0));
+  for (const line of lines) {
+    assert.ok(Number.isInteger(line.kashida) && line.kashida >= 0 && line.kashida <= 4, `${line.kashida}`);
+    if (line.kashida) assert.ok(placeKashida(wordsOf(line.text), line.kashida).some(n => n > 0));
+    assert.equal(line.tracking, 0);
+  }
+  assert.equal(after.overflow, false);
+});
+
+test('kashida never touches Latin or Japanese text', () => {
+  const s = { ...settings, kashida: 4, firmness: 1, rag: 0 };
+  for (const doc of [texts, samples.japanese.split('\n\n')]) {
+    for (const line of compose(doc, measure, s).paragraphs.flatMap(p => p.lines)) assert.equal(line.kashida, 0);
+  }
 });
