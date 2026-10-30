@@ -177,6 +177,18 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     if (rounded) shareGap(target - naturalFill, a, tools, amounts);
     // Use bounded negative adjustment to admit a word that just barely doesn't fit.
     fitMeasure(naturalFill, tools, amounts);
+    // Rounding up a tatweel, or a width step toward natural, can push the line
+    // past the measure, which would discard it. Back off one unit until it fits.
+    for (;;) {
+      let used = 0;
+      for (let i = 0; i < tools.length; i++) if (amounts[i] !== 0) used += tools[i].k * amounts[i];
+      if (naturalFill + used <= 1 + 0.05 / s.width) break;
+      if (amounts[1] > 0) kash.min = kash.max = amounts[1] - 1;
+      else if (fit.min === fit.max && amounts[2] > -widthLimit) fit.min = fit.max = amounts[2] - 1;
+      else break;
+      shareGap(target - naturalFill, a, tools, amounts);
+      fitMeasure(naturalFill, tools, amounts);
+    }
     if (amounts[2] !== 0) {
       // Fitting may condense by a fraction of a step: go to the next whole one,
       // then replace the estimate with the exact width at that step.
