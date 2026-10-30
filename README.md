@@ -1,6 +1,8 @@
 # Unjustified
 
-A responsive TypeScript + CSS + Vite typography lab. Optimize ragged paragraph breaks and subtle per-line tracking, then select paragraph layouts jointly. No added hyphenation or justification.
+A responsive TypeScript + CSS + Vite typography lab for considered ragged-right text, from a natural rag to a nearly justified edge. Paragraph-wide line breaking with per-line tracking, word spacing, kashida, width axis and dictionary hyphenation, with paragraph layouts selected jointly. The text stays real, selectable DOM text, and copying returns it as written.
+
+**Live:** <https://arecsu.github.io/unjustified/>
 
 ## Run
 
@@ -19,6 +21,8 @@ pnpm build          # typecheck + production bundle
 pnpm preview        # local production preview
 pnpm bench          # performance harness (needs a running dev server)
 pnpm bench:search   # pure search benchmark, Node only
+pnpm build:wasm      # rebuild the Rust search kernel (needs the wasm32-unknown-unknown target)
+pnpm run deploy      # build for /unjustified/ and publish dist to the gh-pages branch
 ```
 
 Browser tests use installed Google Chrome. To use bundled Chromium instead, run `pnpm exec playwright install chromium` and remove `channel: 'chrome'` in `playwright.config.ts`.
