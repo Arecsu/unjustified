@@ -9,6 +9,7 @@ import { createMeasure } from './measure';
 import { createFontInstaller } from './font-install';
 import { packCandidates, transferables } from './pack';
 import { warmUpSearch } from './warmup';
+import { loadSearchKernel } from './kernel';
 import type { HelperRequest, HelperResponse } from './protocol';
 
 const scope = globalThis as unknown as {
@@ -19,6 +20,7 @@ const fonts = createFontInstaller(scope.fonts);
 let measureKey = '';
 let cached: ReturnType<typeof createMeasure> | undefined;
 
+const kernelReady = loadSearchKernel(new URL('./kernel/search.wasm', import.meta.url));
 warmUpSearch();
 
 self.onmessage = async (event: MessageEvent<HelperRequest>) => {
@@ -28,6 +30,7 @@ self.onmessage = async (event: MessageEvent<HelperRequest>) => {
     return;
   }
   try {
+    await kernelReady;
     await fonts.install([]);
     await fonts.installSteps(request.settings.widthFlex ?? 0);
     const key = `${request.typeface}:${request.settings.fontSize}:${request.direction}`;

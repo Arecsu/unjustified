@@ -5,10 +5,12 @@ import { createMeasure } from './measure';
 import { createFontInstaller } from './font-install';
 import { unpackCandidates } from './pack';
 import { warmUpSearch } from './warmup';
+import { loadSearchKernel } from './kernel';
 import type { ComposeRequest, HelperRequest, HelperResponse, WarmRequest, WorkerResponse } from './protocol';
 
 const scope = globalThis as unknown as { fonts: FontFaceSet; postMessage: (message: WorkerResponse) => void };
 const fonts = createFontInstaller(scope.fonts);
+const kernelReady = loadSearchKernel(new URL('./kernel/search.wasm', import.meta.url));
 
 /**
  * Paragraph search is independent per paragraph, so long documents are split
@@ -118,6 +120,7 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
       // its search and fonts early. Short ones never start them: every helper
       // holds its own copy of the fonts and measurement cache.
       if (request.text.length >= PARALLEL_CHARACTERS) for (const helper of spawnHelpers() ?? []) shareFonts(helper);
+      await kernelReady;
       warmUpSearch();
       scope.postMessage({ kind: 'warm-jit' });
     } catch (error) {
@@ -128,6 +131,7 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
   }
   const start = performance.now();
   try {
+    await kernelReady;
     if (!await fonts.install(request.fonts)) {
       // The page could not hand over its fonts. Fetching them here is the slow
       // path and can hang in some worker implementations, so bound it and let the

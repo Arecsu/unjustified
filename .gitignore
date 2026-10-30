@@ -10,3 +10,4 @@ playwright-report/
 !.env.example
 research/*.pdf
 research/*.txt
+wasm/target/

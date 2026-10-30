@@ -11,7 +11,8 @@
     "test:e2e": "playwright test",
     "bench": "tsx bench/run.ts",
     "bench:search": "tsx bench/optimizer-bench.ts",
-    "test:production": "pnpm build && playwright test --config=playwright.production.config.ts"
+    "test:production": "pnpm build && playwright test --config=playwright.production.config.ts",
+    "build:wasm": "cd wasm && RUSTFLAGS='-C target-feature=+simd128' cargo build --release --target wasm32-unknown-unknown && cp target/wasm32-unknown-unknown/release/unjustified_search.wasm ../src/kernel/search.wasm"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
