@@ -493,16 +493,36 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button => bu
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); });
   schedule(false);
 }));
+/** Move every slider and its readout to the current settings. */
+function syncControls() {
+  for (const [id, control] of Object.entries(controls)) {
+    const value = Number((Number(settings[control.key]) / control.factor).toFixed(4));
+    $<HTMLInputElement>(`#${id}`).value = String(value); $(`#${id}-value`).textContent = formatControl(id, value, control.unit);
+  }
+  updateTrackingRange();
+}
+/** A flush edge from the tools the text can use: kashida and word spacing for
+ *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is. */
+const justified = { rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04 } satisfies Partial<Settings>;
+let beforeJustified: Partial<Settings> | undefined;
+$('#justify').addEventListener('change', e => {
+  if ((e.target as HTMLInputElement).checked) {
+    beforeJustified = Object.fromEntries(Object.keys(justified).map(key => [key, settings[key as keyof Settings]]));
+    Object.assign(settings, justified);
+  } else if (beforeJustified) {
+    Object.assign(settings, beforeJustified);
+    beforeJustified = undefined;
+  }
+  syncControls();
+  schedule(false);
+});
 $('#reset').addEventListener('click', () => {
   settings = { ...defaults }; direction = 'auto';
   $<HTMLSelectElement>('#direction').value = direction;
   chooseLanguage(paragraphs.join(' '));
   $('#harmony-note').textContent = 'Joint selection across all paragraphs. Set to zero for independent layouts.';
-  for (const [id, control] of Object.entries(controls)) {
-    const value = Number((Number(settings[control.key]) / control.factor).toFixed(4));
-    $<HTMLInputElement>(`#${id}`).value = String(value); $(`#${id}-value`).textContent = formatControl(id, value, control.unit);
-  }
-  updateTrackingRange(); $<HTMLInputElement>('#protect').checked = true; $<HTMLInputElement>('#ending').disabled = false;
+  $<HTMLInputElement>('#justify').checked = false; beforeJustified = undefined;
+  syncControls(); $<HTMLInputElement>('#protect').checked = true; $<HTMLInputElement>('#ending').disabled = false;
   for (const id of ['guides', 'changes', 'inspect', 'visualizers']) { $<HTMLInputElement>(`#${id}`).checked = false; previews.classList.remove(`show-${id}`); }
   inspection = false; $('#line-inspector').hidden = true; schedule(); toast('Composition settings reset. Your text is unchanged.');
 });

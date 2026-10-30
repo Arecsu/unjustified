@@ -438,3 +438,44 @@ test('width flex is disabled for a typeface without a width axis', async ({ page
   await page.locator('#typeface').selectOption('roboto');
   await expect(page.locator('#width-flex')).toBeEnabled();
 });
+
+test('the nearly-justified switch sets a flush edge, keeps tweaks, and restores on off', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await page.locator('#justify').check({ force: true });
+  await settled(page);
+  await expect(page.locator('#rag-value')).toHaveText('0%');
+  await expect(page.locator('#firmness-value')).toHaveText('100%');
+  const fills = () => page.evaluate(() => (window as any).__composition.result.paragraphs
+    .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
+  expect(Math.min(...await fills())).toBeGreaterThan(0.98);
+  // Sliders stay adjustable while it is on.
+  await setRange(page, 'word-spacing', 20);
+  await expect(page.locator('#word-spacing-value')).toHaveText('20%');
+  await expect(page.locator('#justify')).toBeChecked();
+  await page.locator('#justify').uncheck({ force: true });
+  await settled(page);
+  await expect(page.locator('#rag-value')).toHaveText('5.5%');
+  await expect(page.locator('#firmness-value')).toHaveText('0%');
+  await expect(page.locator('#word-spacing-value')).toHaveText('0%');
+  await expect(page.locator('#tracking-max-value')).toHaveText('+0.012 em');
+});
+
+test('the controls stay in view and scroll on their own while the text scrolls', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 700 });
+  await page.goto('/');
+  await settled(page);
+  const controls = page.locator('#composition-controls');
+  await page.locator('.previews').evaluate(el => el.scrollIntoView({ block: 'center' }));
+  await page.mouse.wheel(0, 300);
+  const state = await controls.evaluate(el => ({
+    top: el.getBoundingClientRect().top,
+    scrollable: el.scrollHeight > el.clientHeight,
+    fits: el.getBoundingClientRect().height <= innerHeight + 1,
+  }));
+  expect(Math.abs(state.top)).toBeLessThan(1);
+  expect(state.fits).toBe(true);
+  expect(state.scrollable).toBe(true);
+  await controls.evaluate(el => { el.scrollTop = el.scrollHeight; });
+  await expect(page.locator('#visualizers')).toBeInViewport();
+});

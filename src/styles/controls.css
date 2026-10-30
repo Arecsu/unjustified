@@ -2,7 +2,8 @@
   border: 0.0625rem solid #d9dbd0;
   border-radius: 0.3125rem;
   background: #edeee7;
-  overflow: hidden;
+  /* clip, not hidden: hidden would stop the controls from sticking. */
+  overflow: clip;
   scroll-margin-top: 1.25rem;
 }
 .lab-toolbar {
@@ -74,6 +75,15 @@
   padding: 1.6875rem 1.4375rem;
   background: #f5f5ef;
   border-right: 0.0625rem solid #d9dbd0;
+  /* Stays in view while the text scrolls, and scrolls on its own. */
+  position: sticky;
+  top: 0;
+  align-self: start;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 .control-section+ .control-section {
   border-top: 0.0625rem solid var(--line);
