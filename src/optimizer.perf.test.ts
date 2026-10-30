@@ -34,10 +34,10 @@ const measure = (text: string) => {
 };
 
 const expected = [
-  { paragraphs: 3, explored: 43952, budgetMs: 60 },
-  { paragraphs: 8, explored: 65271, budgetMs: 90 },
-  { paragraphs: 20, explored: 199194, budgetMs: 200 },
-  { paragraphs: 40, explored: 396389, budgetMs: 400 },
+  { paragraphs: 3, explored: 6905, budgetMs: 60 },
+  { paragraphs: 8, explored: 39649, budgetMs: 90 },
+  { paragraphs: 20, explored: 130564, budgetMs: 200 },
+  { paragraphs: 40, explored: 252879, budgetMs: 400 },
 ];
 
 test('document search scales linearly in paragraphs and keeps its path counts', () => {

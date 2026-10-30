@@ -84,6 +84,8 @@ const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(
 const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
 /** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
 const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
+/** How much shorter (fraction of the measure) a body may get for harmony. */
+const HARMONY_SLACK = 0.01;
 /** Weight of the pull toward the full edge for lines inside the rag zone. */
 const ZONE_PULL = 0.15;
 /** Tool stiffness, loosest to stiffest per unit of fill: word spacing (em²),
@@ -734,6 +736,24 @@ class TopK {
   }
 }
 
+/** Layouts whose shortest and average body lines are within HARMONY_SLACK of
+ *  the best layout's. Single-line layouts have no body and always qualify. */
+export function asEvenAsBest(layouts: Layout[]): Layout[] {
+  const body = (layout: Layout) => {
+    const lines = layout.lines.slice(0, -1);
+    if (!lines.length) return undefined;
+    let shortest = Infinity, total = 0;
+    for (const line of lines) { shortest = Math.min(shortest, line.fill); total += line.fill; }
+    return { shortest, mean: total / lines.length };
+  };
+  const best = body(layouts[0]);
+  if (!best) return layouts;
+  return layouts.filter(layout => {
+    const b = body(layout);
+    return !b || (b.shortest >= best.shortest - HARMONY_SLACK && b.mean >= best.mean - HARMONY_SLACK);
+  });
+}
+
 export function compose(texts: string[], measure: Measure, s: Settings, measureAt?: MeasureAt): Composition {
   return composeCandidates(texts.map(text => paragraphCandidates(text, measure, s, 32, measureAt)), s);
 }
@@ -749,6 +769,9 @@ export function composeCandidates(options: { layouts: Layout[]; explored: number
     const paragraphs = options.map(option => option.layouts[0]);
     return { paragraphs, cost: paragraphs.reduce((sum, p) => sum + p.cost, 0), explored, candidates };
   }
+  // Harmony never worsens a paragraph's body: it only chooses among layouts
+  // whose body is as even as the paragraph's best.
+  options = options.map(option => ({ ...option, layouts: asEvenAsBest(option.layouts) }));
 
   // One feature table for every candidate layout: no per-comparison work.
   const offsets = new Int32Array(options.length);

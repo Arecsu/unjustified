@@ -7,7 +7,7 @@
  * They are deliberately slow and allocation-heavy: the point is that they are
  * easy to read and obviously faithful to the documented objective.
  */
-import { greedy, scoreParagraph } from '../src/optimizer';
+import { asEvenAsBest, greedy, scoreParagraph } from '../src/optimizer';
 import type { Layout, Line, Measure, Settings } from '../src/optimizer';
 import { trackingAdvances } from '../src/text-metrics';
 import { segmentText, hasArabic } from '../src/language';
@@ -139,6 +139,7 @@ export function referenceCompose(texts: string[], measure: Measure, s: Settings)
     const paragraphs = options.map(option => option.layouts[0]);
     return { paragraphs, cost: paragraphs.reduce((sum, p) => sum + p.cost, 0), layouts: options.map(o => o.layouts) };
   }
+  for (const option of options) option.layouts = asEvenAsBest(option.layouts);
   let frontier: { paragraphs: Layout[]; cost: number }[] = [{ paragraphs: [], cost: 0 }];
   for (let i = 0; i < options.length; i++) {
     const next: typeof frontier = [];
