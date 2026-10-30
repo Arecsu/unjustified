@@ -294,3 +294,15 @@ for (const [name, sample, expectedLang] of [
     }
   });
 }
+
+test('helper workers start only for long documents', async ({ page }) => {
+  const started = () => page.evaluate(() => ((window as any).__worker?.log ?? []).includes('helpers-started'));
+  await page.goto('/');
+  await settled(page);
+  expect(await started()).toBe(false);
+  await page.locator('#edit-text').click();
+  await page.locator('#text-editor').fill(source);
+  await page.locator('#apply-text').click();
+  await settled(page);
+  expect(await started()).toBe(true);
+});

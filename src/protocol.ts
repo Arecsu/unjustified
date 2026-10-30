@@ -23,7 +23,7 @@ export interface ComposeRequest {
 }
 export type WorkerResponse =
   | ComposeResponse
-  | { kind: 'ready' | 'booted' | 'warm-start' | 'warm-fonts' | 'warm-jit' }
+  | { kind: 'ready' | 'booted' | 'warm-start' | 'warm-fonts' | 'warm-jit' | 'helpers-started' }
   | { kind: 'warm-error'; detail: string };
 export interface ComposeResponse {
   id: number;

@@ -37,6 +37,7 @@ function spawnHelpers(): Helper[] | undefined {
       helper.worker.onerror = () => retireHelpers();
       return helper;
     });
+    scope.postMessage({ kind: 'helpers-started' });
   } catch {
     retireHelpers();
   }
@@ -113,8 +114,10 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
       scope.postMessage({ kind: 'warm-start' });
       await fonts.install(request.fonts);
       scope.postMessage({ kind: 'warm-fonts' });
-      // Start helpers now, while the page paints; each warms its own search.
-      for (const helper of spawnHelpers() ?? []) shareFonts(helper);
+      // Long documents: start helpers now, while the page paints, so each warms
+      // its search and fonts early. Short ones never start them: every helper
+      // holds its own copy of the fonts and measurement cache.
+      if (request.text.length >= PARALLEL_CHARACTERS) for (const helper of spawnHelpers() ?? []) shareFonts(helper);
       warmUpSearch();
       scope.postMessage({ kind: 'warm-jit' });
     } catch (error) {
