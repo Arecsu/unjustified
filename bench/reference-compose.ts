@@ -146,7 +146,7 @@ export function referenceCompose(texts: string[], measure: Measure, s: Settings)
       for (const layout of options[i].layouts) {
         let cost = previous.cost + layout.cost;
         for (const other of previous.paragraphs) {
-          cost += s.sync * 65 * shapeDistanceReference(layout, other) / Math.max(1, texts.length - 1);
+          cost += s.sync * 65 * Math.max(0.002, (1 - (s.firmness ?? 0)) ** 2) * shapeDistanceReference(layout, other) / Math.max(1, texts.length - 1);
         }
         next.push({ paragraphs: [...previous.paragraphs, layout], cost });
       }

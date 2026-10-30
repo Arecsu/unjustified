@@ -279,3 +279,14 @@ test('base letter-spacing is a fixed advance per grapheme, and Arabic ignores it
   const arabic = samples.arabic.split('\n\n');
   assert.deepEqual(compose(arabic, measure, s), compose(arabic, measure, settings));
 });
+
+test('paragraph harmony yields to edge firmness', () => {
+  const firm = { ...settings, rag: 0, firmness: 1, wordSpacing: 0.5 };
+  for (const sample of [samples.editorial, samples.literature, samples.difficult]) {
+    const paragraphs = sample.split('\n\n');
+    // Harmony may still choose between equally even layouts, never a less even one.
+    const shortest = (sync: number) => Math.min(...compose(paragraphs, measure, { ...firm, sync }).paragraphs
+      .flatMap(p => p.lines.slice(0, -1).map(l => l.fill)));
+    assert.ok(shortest(1) >= shortest(0) - 0.005, `${shortest(1)} vs ${shortest(0)}`);
+  }
+});

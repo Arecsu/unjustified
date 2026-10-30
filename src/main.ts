@@ -495,7 +495,7 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button => bu
   schedule(false);
 }));
 function updateHarmonyNote() {
-  $('#harmony-note').textContent = settings.sync === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice.';
+  $('#harmony-note').textContent = settings.sync === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice; edge firmness takes precedence.';
 }
 /** Move every slider and its readout to the current settings. */
 function syncControls() {

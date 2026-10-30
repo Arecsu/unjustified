@@ -599,7 +599,7 @@ export function scoreDocument(paragraphs: Layout[], s: Settings): number {
   const divisor = Math.max(1, paragraphs.length - 1);
   for (let i = 0; i < paragraphs.length; i++) {
     for (let j = 0; j < i; j++) {
-      cost += s.sync * 65 * shapeDistance(paragraphs[i], paragraphs[j]) / divisor;
+      cost += s.sync * 65 * restraint(s) * shapeDistance(paragraphs[i], paragraphs[j]) / divisor;
     }
   }
   return cost;
@@ -748,7 +748,8 @@ export function composeCandidates(options: { layouts: Layout[]; explored: number
     }
   }
 
-  const factor = s.sync * 65 / Math.max(1, options.length - 1);
+  // Harmony yields to edge firmness: it must not break an edge held flush.
+  const factor = s.sync * 65 * restraint(s) / Math.max(1, options.length - 1);
   if (jointKernel && options.length) {
     const counts = Int32Array.from(options, option => option.layouts.length);
     const costs = Float64Array.from(options.flatMap(option => option.layouts.map(layout => layout.cost)));
