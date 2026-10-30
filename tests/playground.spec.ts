@@ -446,6 +446,7 @@ test('the nearly-justified switch sets a flush edge, keeps tweaks, and restores 
   await settled(page);
   await expect(page.locator('#rag-value')).toHaveText('0%');
   await expect(page.locator('#firmness-value')).toHaveText('100%');
+  await expect(page.locator('#sync-value')).toHaveText('0%');
   const fills = () => page.evaluate(() => (window as any).__composition.result.paragraphs
     .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
   expect(Math.min(...await fills())).toBeGreaterThan(0.98);
@@ -458,6 +459,7 @@ test('the nearly-justified switch sets a flush edge, keeps tweaks, and restores 
   await expect(page.locator('#rag-value')).toHaveText('5.5%');
   await expect(page.locator('#firmness-value')).toHaveText('0%');
   await expect(page.locator('#word-spacing-value')).toHaveText('0%');
+  await expect(page.locator('#sync-value')).toHaveText('65%');
   await expect(page.locator('#tracking-max-value')).toHaveText('+0.012 em');
 });
 

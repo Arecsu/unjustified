@@ -443,7 +443,7 @@ for (const [id, control] of Object.entries(controls)) {
     Object.assign(settings, { [control.key]: n * control.factor });
     $(`#${id}-value`).textContent = formatControl(id, n, control.unit);
     if (id.startsWith('tracking-')) updateTrackingRange();
-    if (id === 'sync') $('#harmony-note').textContent = n === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice.';
+    if (id === 'sync') updateHarmonyNote();
     // Tracking, rag, firmness, harmony and ending weights re-rank the same text;
     // type size and base letter-spacing change the paragraph geometry.
     schedule(id === 'font-size' || id === 'letter-spacing');
@@ -494,8 +494,12 @@ document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(button => bu
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', String(b === button)); });
   schedule(false);
 }));
+function updateHarmonyNote() {
+  $('#harmony-note').textContent = settings.sync === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice.';
+}
 /** Move every slider and its readout to the current settings. */
 function syncControls() {
+  updateHarmonyNote();
   for (const [id, control] of Object.entries(controls)) {
     const value = Number((Number(settings[control.key]) / control.factor).toFixed(4));
     $<HTMLInputElement>(`#${id}`).value = String(value); $(`#${id}-value`).textContent = formatControl(id, value, control.unit);
@@ -503,8 +507,10 @@ function syncControls() {
   updateTrackingRange();
 }
 /** A flush edge from the tools the text can use: kashida and word spacing for
- *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is. */
-const justified = { rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04 } satisfies Partial<Settings>;
+ *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is.
+ *  Harmony is off: with flush bodies it only matches last-line lengths, and
+ *  pays for that with extra tracking. */
+const justified = { rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 } satisfies Partial<Settings>;
 let beforeJustified: Partial<Settings> | undefined;
 $('#justify').addEventListener('change', e => {
   if ((e.target as HTMLInputElement).checked) {
