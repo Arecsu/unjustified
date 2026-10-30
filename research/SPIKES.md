@@ -70,3 +70,25 @@ Notes:
 Decision: per-step FontFace (one FontFace per 1% step, spec "Measurement").
 Interpolation fails for Noto Sans Arabic (worst 2.837 px against the 0.3 px
 bar), and the keyword is honoured in both faces.
+
+## 2b. Width axis: per-step faces (2026-10-29)
+
+Method: `research/spikes/run-width-step.ts`, Chrome. For each step N, a
+`FontFace` named `<family> wN` is registered from the same binary with
+`stretch: N%`. Canvas measures with that family at its default stretch, and
+CSS clamps the wdth axis into the face's single-value range. Each result is
+compared with DOM text in the real family at `font-stretch: N%`.
+
+| Face | Worst error across steps (px) |
+| --- | --- |
+| Roboto Flex | 0.016 (all steps 60–100) |
+| Noto Sans Arabic | 0.06–0.44 |
+
+The Arabic error is already 0.357 px at 100%, so it is not caused by the
+stretch. The spike face holds only the Arabic subset file and has no
+`unicode-range`, while the DOM takes spaces and punctuation from Noto's other
+subsets. The product therefore builds step faces per subset, each with its
+original `unicode-range`, which mirrors how the DOM picks glyphs. The product's
+browser test checks Canvas against DOM within 0.3 px with width flex on.
+
+Decision: per-step faces work; one face per subset per 1% step.
