@@ -5,6 +5,8 @@
 .reading-column .cursive-text { font-variant-ligatures: normal; letter-spacing: 0; }
 .reading-column p[dir="rtl"] .line-guide { left: 0; right: var(--line-width); }
 .reading-column p[dir="rtl"] .line-guide:before { left: auto; right: -.125rem; }
+.reading-column p[dir="rtl"] .composed-line::before { left: 0; right: var(--line-width); }
+.reading-column p[dir="rtl"] .composed-line .line-text::after { right: auto; left: -.125rem; }
 .composition-overlay { position: absolute; inset: 0; pointer-events: none; user-select: none; z-index: 2; }
 .diagnostic-mark { display: block; position: absolute; pointer-events: none; }
 .diagnostic-mark.endpoint { background: #87908188; }

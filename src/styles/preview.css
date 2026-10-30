@@ -226,7 +226,31 @@
   height: calc(var(--type-size)*1.55 - 0.4375rem);
   bottom: auto;
 }
-.show-guides .line-guide {
+/* Composed lines draw their guide as generated content: an element inside a
+   line box makes Firefox copy a line break after every line. */
+.composed-line::before {
+  content: '';
+  position: absolute;
+  left: var(--line-width);
+  right: 0;
+  bottom: 0.4375rem;
+  border-bottom: 0.0625rem dotted #b6c1a2;
+  pointer-events: none;
+  opacity: 0;
+}
+.composed-line .line-text::after {
+  content: '';
+  position: absolute;
+  right: -0.125rem;
+  bottom: 0.3125rem;
+  width: 0.25rem;
+  height: 0.25rem;
+  background: #9da88b;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+}
+.show-guides .line-guide,.show-guides .composed-line::before,.show-guides .composed-line .line-text::after {
   opacity: .7;
 }
 .show-guides .reading-column p:after {

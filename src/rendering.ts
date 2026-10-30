@@ -95,12 +95,11 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
       const trailing = lineIndex < layout.lines.length - 1
         ? escapeHtml(separator || (/\s$/u.test(units[line.end - 1] ?? '') ? ' ' : ''))
         : '';
-      const guide = '<span class="line-guide" aria-hidden="true"></span>';
       lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
         + ` style="letter-spacing:${base + line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`
         + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
         + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
-        + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}${guide}</span>`);
+        + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}</span>`);
     });
     const reserve = options.reservePixels?.[pIndex];
     const style = reserve ? ` style="min-height:${reserve.toFixed(2)}px"` : '';

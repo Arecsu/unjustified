@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><title>Copy spike</title>
+<style>
+  body { font: 19px/1.55 Georgia, serif; margin: 2rem; }
+  .col { width: 390px; margin-bottom: 2rem; }
+  /* 1. Current: full-width inline-block line boxes. */
+  .ib p { line-height: 0; margin: 0 0 1em; }
+  .ib span { display: inline-block; width: 100%; white-space: pre; line-height: 1.55; }
+  /* 2. Inline lines; the break is generated content, which is never copied. */
+  .gen p { margin: 0 0 1em; }
+  .gen span { white-space: pre; }
+  .gen span::after { content: '\A'; }
+  /* 3. Pretext: absolutely positioned line spans. */
+  .abs p { position: relative; height: calc(3 * 1.55em); margin: 0 0 1em; }
+  .abs span { position: absolute; left: 0; white-space: pre; }
+  .rel span.l { position: relative; }
+  .g .guide, .rel .guide { position: absolute; left: 50%; right: 0; bottom: 0; height: 1px; }
+</style></head>
+<body>
+<div class="col ib" id="ib"><p><span>Typography is the quiet architecture of </span><span>a page. Before we read a single word, we </span><span>notice its shape.</span></p><p><span>A second paragraph begins </span><span>here and ends here.</span></p></div>
+<div class="col gen" id="gen"><p><span>Typography is the quiet architecture of </span><span>a page. Before we read a single word, we </span><span>notice its shape.</span></p><p><span>A second paragraph begins </span><span>here and ends here.</span></p></div>
+<div class="col abs" id="abs"><p><span style="top:0">Typography is the quiet architecture of </span><span style="top:1.55em">a page. Before we read a single word, we </span><span style="top:3.1em">notice its shape.</span></p><p style="height:3.1em"><span style="top:0">A second paragraph begins </span><span style="top:1.55em">here and ends here.</span></p></div>
+<div class="col ib " id="text"><p><span class="l"><span>Typography is the quiet architecture of</span> </span><span class="l"><span>a page. Before we read a single word, we</span> </span><span class="l"><span>notice its shape.</span></span></p><p><span class="l"><span>A second paragraph begins</span> </span><span class="l"><span>here and ends here.</span></span></p></div>
+<div class="col ib " id="tab"><p><span class="l" tabindex="-1">Typography is the quiet architecture of </span><span class="l" tabindex="-1">a page. Before we read a single word, we </span><span class="l" tabindex="-1">notice its shape.</span></p><p><span class="l" tabindex="-1">A second paragraph begins </span><span class="l" tabindex="-1">here and ends here.</span></p></div>
+<div class="col ib g" id="guide"><p><span class="l">Typography is the quiet architecture of <span class="guide" aria-hidden="true"></span></span><span class="l">a page. Before we read a single word, we <span class="guide" aria-hidden="true"></span></span><span class="l">notice its shape.<span class="guide" aria-hidden="true"></span></span></p><p><span class="l">A second paragraph begins <span class="guide" aria-hidden="true"></span></span><span class="l">here and ends here.<span class="guide" aria-hidden="true"></span></span></p></div>
+<div class="col ib rel" id="rel"><p><span class="l">Typography is the quiet architecture of </span><span class="l">a page. Before we read a single word, we </span><span class="l">notice its shape.</span></p><p><span class="l">A second paragraph begins </span><span class="l">here and ends here.</span></p></div>
+<div class="col ib rel" id="all"><p><span class="l" tabindex="-1"><span>Typography is the quiet architecture of</span> <span class="guide" aria-hidden="true"></span></span><span class="l" tabindex="-1"><span>a page. Before we read a single word, we</span> <span class="guide" aria-hidden="true"></span></span><span class="l" tabindex="-1"><span>notice its shape.</span><span class="guide" aria-hidden="true"></span></span></p><p><span class="l" tabindex="-1"><span>A second paragraph begins</span> <span class="guide" aria-hidden="true"></span></span><span class="l" tabindex="-1"><span>here and ends here.</span><span class="guide" aria-hidden="true"></span></span></p></div>
+</body></html>
