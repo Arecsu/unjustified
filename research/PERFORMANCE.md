@@ -121,27 +121,37 @@ composition is ready do not need it.
 
 **6. Resize is a different path from first load.** Input dispatches immediately, without a debounce or an animation-frame scheduling delay. There is at most one in-flight solve and one latest pending input. Each finished width is committed even if another is pending; discarding every superseded width would starve the preview during a continuous drag. Text/font/size/direction changes still invalidate incompatible results. The next pending solve starts immediately after the previous commit, without waiting for the benchmark's two-frame telemetry. The previous composition stays visible, with stale lines clipped during recomposition. Font binaries are sent and installed only once per subset per worker, not copied and decoded on every input. Tracking, rag, harmony and ending weights re-rank the same text.
 
-## Why not WASM (measured, not assumed)
+## WebAssembly search kernel
 
-* **The cold-path bottleneck cannot move.** 46 ms of a 120 ms cold round trip is
-  `CanvasRenderingContext2D.measureText` — browser text shaping. A WASM kernel
-  would still have to call it (or reimplement shaping and font parsing). The
-  per-call cost is microscopic but there are 13,675 calls, and they must happen
-  in the browser. Turning off kerning in the measurement context makes shaping
-  2.6× faster (3.4 µs → 1.3 µs per call) but changes glyph advances, so it is not
-  a free win.
-* **The search is no longer the bottleneck.** After the changes above it is
-  0.85 ms per paragraph, against ~0.75 µs per `measureText` call. For WASM to
-  help, the candidate widths would have to be computed outside JS anyway — which
-  is the additive-model approximation below, not an implementation-language
-  question. Crossing the JS↔WASM boundary 13,675 times to hand over each
-  candidate's width would cost more than the kernel saves.
-* **Where it could still pay:** a WASM DP that consumes a precomputed width matrix.
-  The current JS kernel is ~35 ms for 40 paragraphs (≈ 400k state updates,
-  ≈ 0.09 µs each). A native kernel might reach 3–5 ms. That is a 30 ms saving on
-  a path that is already off the main thread and cached across resizes, and it
-  costs a build step, a binary to ship and marshalling. Not worth it at this
-  size; worth re-testing if the DP ever runs per frame.
+Composition is split in two: JavaScript builds every candidate line (it needs
+Canvas measurement), then a Rust kernel (`wasm/`, built with `pnpm build:wasm`,
+shipped as `src/kernel/search.wasm`) runs the paragraph beam search and the
+document stage over plain numbers. `src/kernel.test.ts` requires bit-identical
+output against the JavaScript search, which remains the fallback.
+
+The search was dominated by pruning (selecting the cheapest paths), not by
+arithmetic. The kernel sorts `(cost, id)` packed into one integer key and
+prunes in place with reused buffers. Explicit SIMD would not help this
+branch-heavy code, and Binaryen's `wasm-opt` made no measurable difference.
+
+40-paragraph article, idle M1, Node:
+
+| | JavaScript | WebAssembly |
+| --- | ---: | ---: |
+| First composition | 85–87 ms | 54–61 ms |
+| Warm composition | ~41 ms | 18–20 ms |
+
+In the browser, the warm (resize) worker time is ~12–18 ms, from ~43 ms before
+paragraph helpers and the kernel. Cold start is still dominated by Canvas
+measurement and helper startup, which the kernel cannot speed up.
+
+## Paragraph helpers
+
+Long documents (3,000+ characters) split paragraph search across up to four
+nested workers; the composer runs the document stage. Candidates come back as
+transferable typed arrays (`src/pack.ts`). On a 4 GB Android phone this made
+resizes ~25 % faster but the first long composition ~80 ms slower and used
+noticeably more memory; short texts never start helpers.
 
 ## What to optimize next
 
