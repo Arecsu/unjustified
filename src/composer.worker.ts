@@ -162,7 +162,8 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
     cached.trim();
     scope.postMessage({ id: request.id, result, elapsed: performance.now() - start,
       measurements: parallel ? parallel.measurements : cached.calls - countBefore, fontMs,
-      measureMs, searchMs: Math.max(0, compositionMs - measureMs) });
+      measureMs, searchMs: Math.max(0, compositionMs - measureMs),
+      engine: await kernelReady ? 'wasm' : 'js', helpers: parallel ? pool!.length : 0 });
   } catch (error) {
     scope.postMessage({ id: request.id, elapsed: performance.now() - start, measurements: 0,
       fontMs: 0, measureMs: 0, searchMs: 0,

@@ -33,6 +33,9 @@ export interface ComposeResponse {
   fontMs: number;
   measureMs: number;
   searchMs: number;
+  /** Which search ran, and across how many paragraph helpers (0: in the composer). */
+  engine?: 'wasm' | 'js';
+  helpers?: number;
   error?: string;
 }
 

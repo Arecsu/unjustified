@@ -306,3 +306,14 @@ test('helper workers start only for long documents', async ({ page }) => {
   await settled(page);
   expect(await started()).toBe(true);
 });
+
+test('the whole-trip panel names the search engine and helpers that ran', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await expect(page.locator('#benchmark-breakdown')).toContainText('Search (WebAssembly)');
+  await page.locator('#edit-text').click();
+  await page.locator('#text-editor').fill(source);
+  await page.locator('#apply-text').click();
+  await settled(page);
+  await expect(page.locator('#benchmark-breakdown')).toContainText(/Search \(WebAssembly, \d helpers\)/);
+});

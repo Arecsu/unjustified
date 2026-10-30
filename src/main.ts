@@ -396,7 +396,8 @@ function renderResult(response: ComposeResponse) {
     const renderMs = performance.now() - renderStart;
     const timing: RunTiming = { totalMs, fontMs, nativeMs: context.nativeMs, measureMs: response.measureMs,
       searchMs: response.searchMs, renderMs, otherMs: Math.max(0, totalMs - fontMs - context.nativeMs - response.measureMs - response.searchMs - renderMs),
-      queueMs: context.started - context.scheduled, mode: context.mode, measurements: response.measurements };
+      queueMs: context.started - context.scheduled, mode: context.mode, measurements: response.measurements,
+      engine: response.engine ?? 'js', helpers: response.helpers ?? 0 };
     publishTiming(timing);
     Object.assign(data, { timing });
     resolve?.(timing);

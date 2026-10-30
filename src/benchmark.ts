@@ -9,6 +9,8 @@ export interface RunTiming {
   queueMs: number;
   mode: 'cold' | 'warm';
   measurements: number;
+  engine: 'wasm' | 'js';
+  helpers: number;
 }
 const ms = (n: number) => `${Math.max(0, n).toFixed(1)} ms`;
 export function publishTiming(timing: RunTiming) {
@@ -16,7 +18,7 @@ export function publishTiming(timing: RunTiming) {
   document.querySelector('#benchmark-mode')!.textContent = `${timing.mode === 'cold' ? 'Cold layout' : 'Cached layout'} · start → next paint opportunity`;
   document.querySelector('#benchmark-breakdown')!.innerHTML = [
     ['Font readiness', timing.fontMs], ['Native A geometry', timing.nativeMs],
-    ['Canvas measurement', timing.measureMs], ['TypeScript search', timing.searchMs],
+    ['Canvas measurement', timing.measureMs], [`Search (${timing.engine === 'wasm' ? 'WebAssembly' : 'JavaScript'}${timing.helpers ? `, ${timing.helpers} helpers` : ''})`, timing.searchMs],
     ['DOM + frame wait', timing.renderMs], ['Startup / transport / other', timing.otherMs],
   ].map(([label, value]) => `<div><dt>${label}</dt><dd>${ms(Number(value))}</dd></div>`).join('');
   document.querySelector('#benchmark-queue')!.textContent = `Pending-input wait (no debounce): ${ms(timing.queueMs)} separately; interaction-to-frame: ${ms(timing.totalMs + timing.queueMs)}. ${timing.measurements.toLocaleString()} new Canvas measurements.`;
