@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>Kashida spike</title>
+  <style>
+    body { font: 48px/1.6 'Noto Sans Arabic Variable', sans-serif; margin: 2rem; }
+    .row { display: flex; flex-direction: column; align-items: flex-start; gap: 1rem; }
+    .word { display: inline-block; white-space: pre; line-height: 80px; }
+    .k { user-select: none; -webkit-user-select: none; }
+    .kb::before { content: attr(data-k); }
+  </style>
+</head>
+<body>
+  <div id="rows"></div>
+  <script type="module" src="./kashida.ts"></script>
+</body>
+</html>
