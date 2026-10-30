@@ -21,20 +21,20 @@
   margin-top: .1875rem;
   background: linear-gradient(to right, #d7d9cd var(--tracking-start), #8e987d var(--tracking-start), #8e987d var(--tracking-end), #d7d9cd var(--tracking-end)) center / 100% .125rem no-repeat;
 }
-.tracking-zero { position: absolute; left: 50%; height: .375rem; width: .0625rem; top: .625rem; background: #adb59e; pointer-events: none; }
+.tracking-zero { position: absolute; left: var(--zero, 50%); height: .375rem; width: .0625rem; top: .625rem; background: #adb59e; pointer-events: none; }
 .tracking-sliders input {
   appearance: none;
   position: absolute;
   top: 0;
   height: 1.625rem;
-  width: 50%;
   margin: 0;
   background: transparent;
   cursor: ew-resize;
   pointer-events: none;
 }
-#tracking-min { left: 0; }
-#tracking-max { right: 0; }
+/* Two half-ranges meeting at zero; --zero places it for asymmetric limits. */
+.tracking-sliders input:first-of-type { left: 0; width: var(--zero, 50%); }
+.tracking-sliders input:last-of-type { right: 0; width: calc(100% - var(--zero, 50%)); }
 .tracking-sliders input::-webkit-slider-runnable-track { height: .125rem; background: transparent; }
 .tracking-sliders input::-moz-range-track { height: .125rem; background: transparent; }
 .tracking-sliders input::-webkit-slider-thumb {
@@ -56,8 +56,8 @@
   border-radius: 50%;
   background: var(--paper);
 }
-#tracking-max::-webkit-slider-thumb { border-color: #b1785a; }
-#tracking-max::-moz-range-thumb { border-color: #b1785a; }
+.tracking-sliders input:last-of-type::-webkit-slider-thumb { border-color: #b1785a; }
+.tracking-sliders input:last-of-type::-moz-range-thumb { border-color: #b1785a; }
 .tracking-sliders input:focus-visible { outline-offset: .125rem; }
 .tracking-control .control-note { margin-top: .625rem; }
 @media (max-width: 47.5rem) {

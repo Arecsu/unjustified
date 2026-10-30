@@ -78,8 +78,10 @@ function checkInvariants(doc: Doc, s: Settings, c: Composition) {
       assert.ok(l.tracking >= trackMin - 1e-12 && l.tracking <= trackMax + 1e-12, `tracking ${l.tracking}: ${at}`);
       // A space's natural width includes the base letter-spacing it carries.
       const spaceWidth = measureFor(s.fontSize)(separator) + (arabic ? 0 : (s.letterSpacing ?? 0) * s.fontSize);
-      const spaceLimit = separator ? (s.wordSpacing ?? 0) * spaceWidth / s.fontSize : 0;
-      assert.ok(Math.abs(l.wordSpacing) <= spaceLimit + 1e-12, `word spacing ${l.wordSpacing} > ${spaceLimit}: ${at}`);
+      const shrink = separator ? -(s.wordSpacingMin ?? 0) * spaceWidth / s.fontSize : 0;
+      const stretch = separator ? (s.wordSpacingMax ?? 0) * spaceWidth / s.fontSize : 0;
+      assert.ok(l.wordSpacing >= -shrink - 1e-12 && l.wordSpacing <= stretch + 1e-12,
+        `word spacing ${l.wordSpacing} outside ${-shrink}…${stretch}: ${at}`);
       if (hasJapanese(text)) assert.equal(l.wordSpacing, 0, at);
       assert.ok(Number.isInteger(l.kashida) && l.kashida >= 0 && l.kashida <= (arabic ? s.kashida ?? 0 : 0), `kashida ${l.kashida}: ${at}`);
       if (l.kashida) assert.ok(units.slice(l.start, l.end).some(w => bestSite(w)), `kashida without a site: ${at}`);
@@ -110,13 +112,13 @@ const grid: Settings[] = [
   { ...base, trackingMin: -0.08, trackingMax: 0 }, { ...base, trackingMin: 0, trackingMax: 0.08 },
   { ...base, rag: 0 }, { ...base, rag: 0.18 },
   { ...base, firmness: 1 }, { ...base, firmness: 1, rag: 0, trackingMin: -0.08, trackingMax: 0.08 },
-  { ...base, wordSpacing: 0.5 }, { ...base, kashida: 4 }, { ...base, widthFlex: 0.4 },
+  { ...base, wordSpacingMin: -0.5, wordSpacingMax: 0.5 }, { ...base, kashida: 4 }, { ...base, widthFlex: 0.4 },
   { ...base, sync: 0 }, { ...base, sync: 1 },
   { ...base, protectEndings: false }, { ...base, minEnding: 0.6 }, { ...base, minEnding: 0.15 },
   // The nearly-justified preset, and everything at once.
-  { ...base, rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 },
+  { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 },
   { ...base, width: 260, fontSize: 24, letterSpacing: 0.04, trackingMin: -0.08, trackingMax: 0.08, rag: 0.12,
-    firmness: 0.6, wordSpacing: 0.4, kashida: 3, widthFlex: 0.3, sync: 1, minEnding: 0.5 },
+    firmness: 0.6, wordSpacingMin: -0.4, wordSpacingMax: 0.4, kashida: 3, widthFlex: 0.3, sync: 1, minEnding: 0.5 },
 ];
 
 test('invariants hold for every document under every grid setting', () => {
@@ -137,7 +139,7 @@ test('composition is deterministic', () => {
 test('new controls at zero change nothing', () => {
   for (const doc of Object.keys(corpus) as Doc[]) {
     const plain = compose(corpus[doc], measureFor(19), base);
-    const zeroed = compose(corpus[doc], measureFor(19), { ...base, firmness: 0, wordSpacing: 0, kashida: 0,
+    const zeroed = compose(corpus[doc], measureFor(19), { ...base, firmness: 0, wordSpacingMin: -0, wordSpacingMax: 0, kashida: 0,
       widthFlex: 0, letterSpacing: 0 }, measureAtFor(19));
     assert.deepEqual(zeroed, plain, doc);
   }
@@ -197,19 +199,35 @@ test('room for the rag: a larger zone loosens the edge without narrowing the col
 });
 
 test('edge firmness: firmer edges are more even', () => {
-  const at = (firmness: number) => ({ ...base, rag: 0, firmness, trackingMin: -0.04, trackingMax: 0.04, wordSpacing: 0.3 });
+  const at = (firmness: number) => ({ ...base, rag: 0, firmness, trackingMin: -0.04, trackingMax: 0.04, wordSpacingMin: -0.3, wordSpacingMax: 0.3 });
   const values = [0, 0.5, 1].map(f => sum(latin, d => deviation(run(d, at(f)), at(f))));
   assert.ok(values[0] > values[1] && values[1] > values[2], `deviation by firmness: ${values}`);
 });
 
 test('word spacing: flex evens the edge for Latin and Arabic, never for Japanese', () => {
   for (const doc of [...latin, 'arabic'] as Doc[]) {
-    const at = (wordSpacing: number) => ({ ...base, rag: 0, firmness: 1, trackingMin: 0, trackingMax: 0, wordSpacing });
+    const at = (wordSpacing: number) => ({ ...base, rag: 0, firmness: 1, trackingMin: 0, trackingMax: 0,
+      wordSpacingMin: -wordSpacing, wordSpacingMax: wordSpacing });
     const without = deviation(run(doc, at(0)), at(0)), with50 = deviation(run(doc, at(0.5)), at(0.5));
     assert.ok(with50 < without, `${doc}: ${with50} vs ${without}`);
   }
-  assert.ok(run('japanese', { ...base, wordSpacing: 0.5, firmness: 1 }).paragraphs
+  assert.ok(run('japanese', { ...base, wordSpacingMin: -0.5, wordSpacingMax: 0.5, firmness: 1 }).paragraphs
     .every(p => p.lines.every(l => l.wordSpacing === 0)));
+});
+
+test('word spacing range: each handle bounds its own direction, and wide stretch is used', () => {
+  const flat = { ...base, rag: 0, firmness: 1, trackingMin: 0, trackingMax: 0 };
+  const lines = (s: Settings) => latin.flatMap(d => run(d, s).paragraphs.flatMap(p => p.lines));
+  assert.ok(lines({ ...flat, wordSpacingMin: 0, wordSpacingMax: 2 }).every(l => l.wordSpacing >= 0), 'stretch-only shrank');
+  assert.ok(lines({ ...flat, wordSpacingMin: -0.5, wordSpacingMax: 0 }).every(l => l.wordSpacing <= 0), 'shrink-only stretched');
+  // Wider stretch is used beyond the old 50 % cap, and evens the edge further.
+  const space = measureFor(19)(' ') / 19;
+  const wide = { ...flat, wordSpacingMin: -0.25, wordSpacingMax: 2 };
+  assert.ok(lines(wide).some(l => l.wordSpacing > 0.5 * space + 1e-9), 'never stretched past 50 %');
+  const at50 = { ...flat, wordSpacingMin: -0.25, wordSpacingMax: 0.5 };
+  assert.ok(sum(latin, d => deviation(run(d, wide), wide)) < sum(latin, d => deviation(run(d, at50), at50)));
+  // Shrinking stays within its own, smaller limit.
+  assert.ok(lines(wide).every(l => l.wordSpacing >= -0.25 * space - 1e-12));
 });
 
 test('kashida: tatweels even Arabic lines and touch nothing else', () => {
@@ -246,7 +264,7 @@ test('paragraph harmony: shapes grow alike when the edge is loose, never at the 
     - run(d, s).paragraphs.reduce((n, p) => n + p.cost, 0));
   const apart = distance({ ...base, sync: 0 }), together = distance({ ...base, sync: 1 });
   assert.ok(together < apart, `pairwise shape distance ${together} vs ${apart} independent`);
-  const firm = { ...base, rag: 0, firmness: 1, wordSpacing: 0.5, trackingMin: -0.04, trackingMax: 0.04 };
+  const firm = { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 0.5, trackingMin: -0.04, trackingMax: 0.04 };
   for (const d of docs) {
     const independent = shortest(run(d, { ...firm, sync: 0 })), concert = shortest(run(d, { ...firm, sync: 1 }));
     assert.ok(concert >= independent - 0.005, `${d}: shortest body ${concert} vs ${independent} independent`);
@@ -255,7 +273,7 @@ test('paragraph harmony: shapes grow alike when the edge is loose, never at the 
 });
 
 test('nearly justified: the preset makes every body line flush in every script it can', () => {
-  const preset = { ...base, rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 };
+  const preset = { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 };
   for (const doc of [...latin, 'arabic'] as Doc[]) {
     const c = run(doc, preset);
     assert.ok(shortest(c) > 0.97, `${doc}: shortest body line ${shortest(c)}`);

@@ -3,6 +3,8 @@
 /* Stable additive CJK advances: no pair kerning or automatic punctuation halving. */
 .reading-column p:lang(ja) { font-kerning: none; text-spacing-trim: space-all; }
 .reading-column .cursive-text { font-variant-ligatures: normal; letter-spacing: 0; }
+/* Optional comparison: the browser's own justification on column A. */
+.reading-column.justify-native p { text-align: justify; }
 .reading-column p[dir="rtl"] .line-guide { left: 0; right: var(--line-width); }
 .reading-column p[dir="rtl"] .line-guide:before { left: auto; right: -.125rem; }
 .reading-column p[dir="rtl"] .composed-line::before { left: 0; right: var(--line-width); }

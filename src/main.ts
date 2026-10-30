@@ -33,7 +33,7 @@ const MAX_CHARACTERS = 30000;
  */
 const RESERVE_NATIVE_HEIGHT = false;
 
-const defaults = { width: 390, fontSize: 19, letterSpacing: 0, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, kashida: 0, widthFlex: 0, protectEndings: true } satisfies Settings;
+const defaults = { width: 390, fontSize: 19, letterSpacing: 0, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacingMin: 0, wordSpacingMax: 0, kashida: 0, widthFlex: 0, protectEndings: true } satisfies Settings;
 let settings: Settings = { ...defaults };
 let paragraphs = samples.editorial.split('\n\n');
 let typeface: Typeface = 'serif';
@@ -98,7 +98,7 @@ function updateScriptUI() {
     ? 'Arabic only: lengthens joins with tatweel (ـ), following the traditional priority. Copying returns the text without them.'
     : 'Kashida applies to Arabic text only.';
   const noSpaces = paragraphs.every(text => segmentText(text).separator === '');
-  $<HTMLInputElement>('#word-spacing').disabled = noSpaces;
+  for (const id of ['word-spacing-min', 'word-spacing-max']) $<HTMLInputElement>(`#${id}`).disabled = noSpaces;
   $('#word-spacing-note').textContent = noSpaces
     ? 'Japanese has no word spaces; tracking handles its edge.'
     : 'How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.';
@@ -425,24 +425,30 @@ const controls: Record<string, { key: keyof Settings; factor: number; unit: stri
   'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, 'letter-spacing': { key: 'letterSpacing', factor: 1, unit: ' em' }, measure: { key: 'width', factor: 1, unit: ' px' },
   'tracking-min': { key: 'trackingMin', factor: 1, unit: ' em' }, 'tracking-max': { key: 'trackingMax', factor: 1, unit: ' em' },
   rag: { key: 'rag', factor: .01, unit: '%' },
-  'word-spacing': { key: 'wordSpacing', factor: .01, unit: '%' },
+  'word-spacing-min': { key: 'wordSpacingMin', factor: .01, unit: '%' }, 'word-spacing-max': { key: 'wordSpacingMax', factor: .01, unit: '%' },
   kashida: { key: 'kashida', factor: 1, unit: '' },
   'width-flex': { key: 'widthFlex', factor: .01, unit: '%' },
   firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
 };
 function formatControl(id: string, value: number, unit: string) {
+  if (id.startsWith('word-spacing-')) return `${id.endsWith('min') ? '−' : '+'}${Math.abs(value)}${unit}`;
   return id.startsWith('tracking-') || id === 'letter-spacing' ? `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(3)}${unit}` : `${value}${unit}`;
 }
+/** Shade each two-handle range between its handles. */
 function updateTrackingRange() {
-  $('.tracking-sliders').style.setProperty('--tracking-start', `${(settings.trackingMin + .08) / .16 * 100}%`);
-  $('.tracking-sliders').style.setProperty('--tracking-end', `${(settings.trackingMax + .08) / .16 * 100}%`);
+  const shade = (id: string, low: number, high: number, min: number, max: number) => {
+    $(`#${id}`).style.setProperty('--tracking-start', `${(min - low) / (high - low) * 100}%`);
+    $(`#${id}`).style.setProperty('--tracking-end', `${(max - low) / (high - low) * 100}%`);
+  };
+  shade('tracking-sliders', -0.08, 0.08, settings.trackingMin, settings.trackingMax);
+  shade('word-spacing-sliders', -0.5, 2, settings.wordSpacingMin ?? 0, settings.wordSpacingMax ?? 0);
 }
 for (const [id, control] of Object.entries(controls)) {
   $<HTMLInputElement>(`#${id}`).addEventListener('input', event => {
     const n = Number((event.target as HTMLInputElement).value);
     Object.assign(settings, { [control.key]: n * control.factor });
     $(`#${id}-value`).textContent = formatControl(id, n, control.unit);
-    if (id.startsWith('tracking-')) updateTrackingRange();
+    if (id.startsWith('tracking-') || id.startsWith('word-spacing-')) updateTrackingRange();
     if (id === 'sync') updateHarmonyNote();
     // Tracking, rag, firmness, harmony and ending weights re-rank the same text;
     // type size and base letter-spacing change the paragraph geometry.
@@ -470,6 +476,11 @@ $('#protect').addEventListener('change', e => {
   $<HTMLInputElement>('#ending').disabled = !settings.protectEndings; schedule(false);
 });
 $('#visualizers').addEventListener('change', visualizers);
+$('#justify-native').addEventListener('change', e => {
+  baseEl.classList.toggle('justify-native', (e.target as HTMLInputElement).checked);
+  // Same breaks, new geometry: re-read A and refresh its guides and stats.
+  schedule(false);
+});
 $('#benchmark-run').addEventListener('click', () => { void benchmark(cold => recompute(cold)); });
 for (const id of ['guides', 'changes', 'inspect']) $(`#${id}`).addEventListener('change', e => {
   const checked = (e.target as HTMLInputElement).checked; previews.classList.toggle(`show-${id}`, checked);
@@ -510,7 +521,7 @@ function syncControls() {
  *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is.
  *  Harmony is off: with flush bodies it only matches last-line lengths, and
  *  pays for that with extra tracking. */
-const justified = { rag: 0, firmness: 1, wordSpacing: 0.5, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 } satisfies Partial<Settings>;
+const justified = { rag: 0, firmness: 1, wordSpacingMin: -0.25, wordSpacingMax: 1, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 } satisfies Partial<Settings>;
 let beforeJustified: Partial<Settings> | undefined;
 $('#justify').addEventListener('change', e => {
   if ((e.target as HTMLInputElement).checked) {
@@ -529,6 +540,7 @@ $('#reset').addEventListener('click', () => {
   chooseLanguage(paragraphs.join(' '));
   $('#harmony-note').textContent = 'Joint selection across all paragraphs. Set to zero for independent layouts.';
   $<HTMLInputElement>('#justify').checked = false; beforeJustified = undefined;
+  $<HTMLInputElement>('#justify-native').checked = false; baseEl.classList.remove('justify-native');
   syncControls(); $<HTMLInputElement>('#protect').checked = true; $<HTMLInputElement>('#ending').disabled = false;
   for (const id of ['guides', 'changes', 'inspect', 'visualizers']) { $<HTMLInputElement>(`#${id}`).checked = false; previews.classList.remove(`show-${id}`); }
   inspection = false; $('#line-inspector').hidden = true; schedule(); toast('Composition settings reset. Your text is unchanged.');

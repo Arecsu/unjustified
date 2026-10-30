@@ -298,8 +298,9 @@ test('word spacing flex evens Arabic lines with tracking locked at zero', async 
   await setRange(page, 'rag', 0);
   await setRange(page, 'firmness', 100);
   const ragged = Math.min(...await bodyFills());
-  await setRange(page, 'word-spacing', 50);
-  await expect(page.locator('#word-spacing-value')).toHaveText('50%');
+  await setRange(page, 'word-spacing-min', -50);
+  await setRange(page, 'word-spacing-max', 50);
+  await expect(page.locator('#word-spacing-max-value')).toHaveText('+50%');
   // Arabic lines have few spaces, so 50 % flex narrows the rag rather than
   // closing it; the shortest body line must still get longer.
   expect(Math.min(...await bodyFills())).toBeGreaterThan(ragged);
@@ -332,10 +333,11 @@ test('word spacing flex evens Arabic lines with tracking locked at zero', async 
 test('word spacing flex is disabled for all-Japanese text', async ({ page }) => {
   await page.goto('/');
   await settled(page);
-  await expect(page.locator('#word-spacing')).toBeEnabled();
+  await expect(page.locator('#word-spacing-max')).toBeEnabled();
   await page.locator('#language').selectOption('ja');
   await settled(page);
-  await expect(page.locator('#word-spacing')).toBeDisabled();
+  await expect(page.locator('#word-spacing-max')).toBeDisabled();
+  await expect(page.locator('#word-spacing-min')).toBeDisabled();
   await expect(page.locator('#word-spacing-note')).toContainText('no word spaces');
 });
 
@@ -451,14 +453,16 @@ test('the nearly-justified switch sets a flush edge, keeps tweaks, and restores 
     .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
   expect(Math.min(...await fills())).toBeGreaterThan(0.98);
   // Sliders stay adjustable while it is on.
-  await setRange(page, 'word-spacing', 20);
-  await expect(page.locator('#word-spacing-value')).toHaveText('20%');
+  await expect(page.locator('#word-spacing-max-value')).toHaveText('+100%');
+  await setRange(page, 'word-spacing-max', 150);
+  await expect(page.locator('#word-spacing-max-value')).toHaveText('+150%');
   await expect(page.locator('#justify')).toBeChecked();
   await page.locator('#justify').uncheck({ force: true });
   await settled(page);
   await expect(page.locator('#rag-value')).toHaveText('5.5%');
   await expect(page.locator('#firmness-value')).toHaveText('0%');
-  await expect(page.locator('#word-spacing-value')).toHaveText('0%');
+  await expect(page.locator('#word-spacing-max-value')).toHaveText('+0%');
+  await expect(page.locator('#word-spacing-min-value')).toHaveText('−0%');
   await expect(page.locator('#sync-value')).toHaveText('65%');
   await expect(page.locator('#tracking-max-value')).toHaveText('+0.012 em');
 });
@@ -519,4 +523,21 @@ test('base letter spacing applies to both columns and keeps Canvas and DOM in ag
     await page.keyboard.press('ControlOrMeta+c');
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected.join('\n\n'));
   }
+});
+
+test('column A can show the browser’s own justification for comparison', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  const nativeBody = () => page.evaluate(() => (window as any).__composition.baseline
+    .flatMap((p: any) => p.lines.slice(0, -1).map((l: any) => l.fill)) as number[]);
+  const before = Math.min(...await nativeBody());
+  await page.locator('#justify-native').check({ force: true });
+  await settled(page);
+  await expect(page.locator('#baseline p').first()).toHaveCSS('text-align', 'justify');
+  expect(Math.min(...await nativeBody())).toBeGreaterThan(Math.max(before, 0.98));
+  // Column B is untouched.
+  await expect(page.locator('#optimized p').first()).not.toHaveCSS('text-align', 'justify');
+  await page.locator('#justify-native').uncheck({ force: true });
+  await settled(page);
+  await expect(page.locator('#baseline p').first()).not.toHaveCSS('text-align', 'justify');
 });

@@ -32,9 +32,10 @@ export interface Settings {
   /** 0–1. Trades tracking restraint for an even edge: 0 is the ragged default,
    *  1 spends the tracking bounds freely to pull lines onto the rag target. */
   firmness?: number;
-  /** 0–0.5. How far each inter-word space may shrink or stretch, as a fraction
-   *  of its natural width. 0 disables word-spacing adjustment. */
-  wordSpacing?: number;
+    /** How far each inter-word space may shrink (<= 0) and stretch (>= 0), as
+   *  fractions of its natural width. Both 0 disable word-spacing adjustment. */
+  wordSpacingMin?: number;
+  wordSpacingMax?: number;
   /** Base CSS letter-spacing of the text, in em. Tracking adjusts relative to
    *  it. Arabic paragraphs ignore it. */
   letterSpacing?: number;
@@ -132,7 +133,7 @@ function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): 
 
 /** Build one candidate line from an already-measured natural width. */
 function buildLine(start: number, end: number, text: string, natural: number, advances: number,
-  totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceLimit = 0,
+  totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceShrink = 0, spaceStretch = 0,
   kashidaLimit = 0, tatweel = 0, widthLimit = 0, measureAt?: MeasureAt): Line | null {
   // CSS tracking contributes a trailing advance too. Japanese uses grapheme
   // advances; connected Arabic paragraphs have their tracking bounds set to zero.
@@ -150,7 +151,7 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     kash.min = 0; kash.max = kashidaLimit;
     words.k = spaces * s.fontSize / s.width;
     words.b = WORD_STIFFNESS * restraint(s);
-    words.min = -spaceLimit; words.max = spaceLimit;
+    words.min = -spaceShrink; words.max = spaceStretch;
     track.k = advances * s.fontSize / s.width;
     track.b = TRACKING_STIFFNESS * restraint(s);
     track.min = s.trackingMin; track.max = s.trackingMax;
@@ -484,7 +485,8 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   for (let i = 0; i < total; i++) unitWidths[i] = measure(words[i]);
   const spaceWidth = separator ? measure(separator) : 0;
   // Word-spacing bound in em. Japanese has no separator, so no spaces to adjust.
-  const spaceLimit = (s.wordSpacing ?? 0) * spaceWidth / s.fontSize;
+  const spaceShrink = -(s.wordSpacingMin ?? 0) * spaceWidth / s.fontSize;
+  const spaceStretch = (s.wordSpacingMax ?? 0) * spaceWidth / s.fontSize;
   // Kashida: which words can take a tatweel, as a prefix count per line range.
   const kashidaLimit = s.kashida && hasArabic(text) ? s.kashida : 0;
   const tatweel = kashidaLimit ? measure(TATWEEL) : 0;
@@ -520,12 +522,13 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
       const spaces = separator ? end - start - 1 : 0;
       // Tracking and word spacing can move a line's width: allow for the full bounded amount.
       const trackingPx = advances * s.fontSize;
-      const spacingPx = spaceLimit > 0 ? spaceLimit * spaces * s.fontSize : 0;
+      const shrinkPx = spaceShrink > 0 ? spaceShrink * spaces * s.fontSize : 0;
+      const stretchPx = spaceStretch > 0 ? spaceStretch * spaces * s.fontSize : 0;
       // Condensing by N % never narrows text by more than N % of its width.
-      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + spacingPx
+      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + shrinkPx
         + (widthLimit ? estimate * widthLimit / 100 : 0);
       const lineKashida = kashidaLimit && sitePrefix[end] > sitePrefix[start] ? kashidaLimit : 0;
-      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - spacingPx
+      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - stretchPx
         - (lineKashida ? lineKashida * tatweel : 0);
       if (estimate > longest) {
         // Beyond the overflow threshold, a longer line can only overflow further.
@@ -534,7 +537,7 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         // Cannot reach the 0.50 fill floor that the search requires.
         continue;
       }
-      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceLimit,
+      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceShrink, spaceStretch,
         lineKashida, tatweel, widthLimit, measureAt);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;

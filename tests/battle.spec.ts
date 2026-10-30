@@ -18,12 +18,12 @@ interface Case {
   article?: boolean;
 }
 
-const justify: [string, number][] = [['rag', 0], ['firmness', 100], ['word-spacing', 50], ['kashida', 4],
+const justify: [string, number][] = [['rag', 0], ['firmness', 100], ['word-spacing-min', -25], ['word-spacing-max', 100], ['kashida', 4],
   ['tracking-min', -0.04], ['tracking-max', 0.04], ['sync', 0]];
 const cases: Case[] = [
   { name: 'English nearly justified in Georgia', typeface: 'classic', ranges: justify },
   { name: 'English Roboto Flex with every tool', typeface: 'roboto', ranges: [['letter-spacing', 0.03], ['width-flex', 30],
-    ['tracking-min', -0.04], ['tracking-max', 0.04], ['rag', 10], ['firmness', 50], ['word-spacing', 30], ['sync', 100]] },
+    ['tracking-min', -0.04], ['tracking-max', 0.04], ['rag', 10], ['firmness', 50], ['word-spacing-min', -30], ['word-spacing-max', 150], ['sync', 100]] },
   { name: 'English loose rag, tight letter-spacing, narrow column', ranges: [['letter-spacing', -0.03], ['rag', 18],
     ['measure', 260], ['font-size', 24], ['ending', 55]] },
   { name: 'Arabic kashida, word spacing and width', language: 'ar', ranges: [...justify, ['width-flex', 30]], diagnostics: true },

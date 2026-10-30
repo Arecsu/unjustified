@@ -30,7 +30,7 @@
             <p class="control-note">Sets every slider below for a flush edge, with paragraph harmony off. Adjust any of them freely; switch off to restore your previous values.</p>
             <fieldset class="tracking-control"><legend>Tracking range</legend>
               <div class="tracking-values"><output id="tracking-min-value" for="tracking-min">−0.012 em</output><output id="tracking-max-value" for="tracking-max">+0.012 em</output></div>
-              <div class="tracking-sliders" style="--tracking-start:42.5%;--tracking-end:57.5%">
+              <div id="tracking-sliders" class="tracking-sliders" style="--tracking-start:42.5%;--tracking-end:57.5%">
                 <input type="range" id="tracking-min" min="-0.08" max="0" step="0.001" value="-0.012" aria-label="Minimum tracking (shrink)" />
                 <input type="range" id="tracking-max" min="0" max="0.08" step="0.001" value="0.012" aria-label="Maximum tracking (expand)" />
                 <span class="tracking-zero" aria-hidden="true"></span>
@@ -39,12 +39,20 @@
               <p id="tracking-note" class="control-note">Two independent limits, not a forced adjustment.</p>
             </fieldset>
             {{range:rag}}
-            {{range:word-spacing}}
+            <fieldset class="tracking-control"><legend>Word spacing range</legend>
+              <div class="tracking-values"><output id="word-spacing-min-value" for="word-spacing-min">−0%</output><output id="word-spacing-max-value" for="word-spacing-max">+0%</output></div>
+              <div id="word-spacing-sliders" class="tracking-sliders" style="--zero:20%;--tracking-start:20%;--tracking-end:20%">
+                <input type="range" id="word-spacing-min" min="-50" max="0" step="5" value="0" aria-label="How far a space may shrink" />
+                <input type="range" id="word-spacing-max" min="0" max="200" step="5" value="0" aria-label="How far a space may stretch" />
+                <span class="tracking-zero" aria-hidden="true"></span>
+              </div>
+              <div class="range-ends"><span>Shrink</span><span>Stretch</span></div>
+              <p id="word-spacing-note" class="control-note">How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.</p>
+            </fieldset>
             {{range:kashida}}
             <p id="kashida-note" class="control-note">Arabic only: lengthens joins with tatweel (ـ), following the traditional priority. Copying returns the text without them.</p>
             {{range:width-flex}}
             <p id="width-flex-note" class="control-note">Condenses lines along the font's width axis, in whole steps.</p>
-                        <p id="word-spacing-note" class="control-note">How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.</p>
             {{range:firmness}}
             <p id="firmness-note" class="control-note">How freely tracking is spent to pull lines onto the rag. Pair with less room for the rag and wider tracking for a nearly flush edge.</p>
             {{range:sync}}
@@ -55,6 +63,8 @@
           <div class="control-section display-controls"><h2><span>03</span> Look closer</h2>
             <label class="toggle-row" for="visualizers"><span>Composition diagnostics</span><input type="checkbox" id="visualizers" /><span class="switch" aria-hidden="true"></span></label>
             <p class="control-note">Grey ticks: this line end; faint ticks: the other layout’s same line number. Orange + / blue −: tracking in ‰ em. Amber: short ending. Red: overflow only. An uneven margin is not an error.</p>
+            <label class="toggle-row" for="justify-native"><span>Justify browser default (A)</span><input type="checkbox" id="justify-native" /><span class="switch" aria-hidden="true"></span></label>
+            <p class="control-note">Plain CSS <code>text-align: justify</code> on A, for comparison: same breaks, stretched spaces.</p>
             <label class="toggle-row" for="guides"><span>Show line guides</span><input type="checkbox" id="guides" /><span class="switch" aria-hidden="true"></span></label>
             <label class="toggle-row" for="changes"><span>Highlight moved words</span><input type="checkbox" id="changes" /><span class="switch" aria-hidden="true"></span></label>
             <label class="toggle-row" for="inspect"><span>Inspect individual lines</span><input type="checkbox" id="inspect" /><span class="switch" aria-hidden="true"></span></label>

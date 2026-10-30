@@ -16,7 +16,7 @@ const base: Settings = { width: 390, fontSize: 19, trackingMin: -0.012, tracking
   minEnding: 0.32, sync: 0.65, protectEndings: true };
 const variants: Settings[] = [
   base, { ...base, width: 240 }, { ...base, width: 720, sync: 0 }, { ...base, trackingMin: -0.08, trackingMax: 0.08, firmness: 1, rag: 0 },
-  { ...base, wordSpacing: 0.5, kashida: 4, widthFlex: 0.3, firmness: 0.7 }, { ...base, protectEndings: false, sync: 1 },
+  { ...base, wordSpacingMin: -0.5, wordSpacingMax: 0.5, kashida: 4, widthFlex: 0.3, firmness: 0.7 }, { ...base, protectEndings: false, sync: 1 },
 ];
 const documents = [...Object.values(samples).map(text => text.split('\n\n')), makeParagraphs(10, 3), makeParagraphs(40, 11)];
 
