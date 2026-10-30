@@ -34,3 +34,39 @@ Notes:
 
 Decision: Chrome: span. WebKit: span (joined by eye, see note 2; `::before`
 renders identically, so the choice does not matter there). Firefox: span.
+
+## 2. Width axis: Canvas interpolation (2026-10-29)
+
+Method: `research/spikes/run-width.ts`, Chrome. Interpolate linearly between
+Canvas widths at `normal` and the narrowest keyword the face supports, then
+compare with DOM width at each `font-stretch` percentage. Lines are 40–60
+characters from the samples, at 19 px.
+
+| Face | Keyword honoured | Worst error, any step (px) | Mean error (px) |
+| --- | --- | --- | --- |
+| Noto Sans Arabic | yes (extra-condensed, 62.5%) | 2.837 (at 75%) | 2.463 (at 80%) |
+| Roboto Flex | yes (ultra-condensed, 50%) | 0.016 (at 87.5% and 70%) | 0.009 (at 87.5%) |
+
+Notes:
+1. The error and mean columns are maxima over the tested steps (100 to the
+   narrowest keyword). Noto Sans Arabic has 9 lines and Roboto Flex has 10.
+2. Canvas honours the axis. At the exact keyword steps (87.5%, 75%, 62.5%),
+   Canvas and DOM agree within 0.016 px for both faces. Noto's error therefore
+   comes from the wdth axis not being linear between 100% and 62.5%, not from
+   Canvas.
+3. Two fixes were needed before the 100% rows could be trusted. Both are in
+   `width.ts`:
+   - `document.fonts.load` rejects a percentage in the `font` shorthand, so the
+     variable face is loaded once per family.
+   - The DOM spans set `font-variant-ligatures: none` and Canvas cannot. The
+     first run had Roboto Flex at 0.846 px worst error at 100%, from the `fi`
+     and related ligatures. Setting `letterSpacing = '0.000001px'` in Canvas
+     disables optional ligatures, which is the trick `src/text-metrics.ts`
+     uses. After that the 100% row is 0.015 px. Noto was 0.015 px either way.
+4. Roboto Flex passes at every step. The rule needs every face to pass, and
+   Noto does not, so the decision is per-step FontFace for both. Interpolation
+   for Roboto alone is not a basis for a per-face decision.
+
+Decision: per-step FontFace (one FontFace per 1% step, spec "Measurement").
+Interpolation fails for Noto Sans Arabic (worst 2.837 px against the 0.3 px
+bar), and the keyword is honoured in both faces.
