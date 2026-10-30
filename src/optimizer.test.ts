@@ -241,3 +241,33 @@ test('kashida never touches Latin or Japanese text', () => {
     for (const line of compose(doc, measure, s).paragraphs.flatMap(p => p.lines)) assert.equal(line.kashida, 0);
   }
 });
+
+/** A font whose width axis is deliberately non-linear: 100 % → 1, 70 % → ~0.82. */
+const measureAt = (text: string, stretch: number) => measure(text) * (0.55 + 0.45 * (stretch / 100) ** 1.5);
+
+test('width flex at zero, or without a step-aware measure, changes nothing', () => {
+  const plain = compose(texts, measure, settings);
+  assert.deepEqual(compose(texts, measure, { ...settings, widthFlex: 0 }, measureAt), plain);
+  assert.deepEqual(compose(texts, measure, { ...settings, widthFlex: 0.3 }), plain);
+});
+
+test('width flex condenses long lines in whole steps, measured exactly at the chosen step', () => {
+  const flat = { ...settings, trackingMin: 0, trackingMax: 0, rag: 0.08, firmness: 1 };
+  const condensed = { ...flat, widthFlex: 0.3 };
+  const result = compose(texts, measure, condensed, measureAt);
+  const lines = result.paragraphs.flatMap(p => p.lines);
+  assert.ok(lines.some(line => line.stretch < 100), 'no line condensed');
+  for (const line of lines) {
+    assert.ok(Number.isInteger(line.stretch) && line.stretch >= 70 && line.stretch <= 100, `${line.stretch}`);
+    const exact = measureAt(line.text, line.stretch);
+    assert.ok(Math.abs(line.width - exact) < 1e-9, `${line.width} vs ${exact} at ${line.stretch}`);
+  }
+  assert.equal(metrics(result.paragraphs, condensed).overflow, false);
+});
+
+test('condensing lets lines hold more words', () => {
+  const tight = { ...settings, trackingMin: 0, trackingMax: 0, rag: 0, firmness: 1 };
+  const before = compose(texts, measure, tight).paragraphs.reduce((n, p) => n + p.lines.length, 0);
+  const after = compose(texts, measure, { ...tight, widthFlex: 0.4 }, measureAt).paragraphs.reduce((n, p) => n + p.lines.length, 0);
+  assert.ok(after <= before, `${after} lines vs ${before}`);
+});

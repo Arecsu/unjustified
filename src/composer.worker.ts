@@ -1,5 +1,5 @@
 import { compose, paragraphCandidates } from './optimizer';
-import { loadFonts } from './fonts';
+import { fontBinaries, installWidthSteps, loadFonts, widthSteps } from './fonts';
 import { createMeasure } from './measure';
 import type { ComposeRequest, WarmRequest, WorkerResponse } from './protocol';
 import type { FontBinary } from './fonts';
@@ -30,12 +30,17 @@ function warmUpSearch() {
  * the set was usable; a failure falls back to fetching in the worker.
  */
 const installedFonts = new Map<string, Promise<FontFace>>();
+/** Binaries received from the page, kept to build width-step faces later. */
+const receivedFonts: FontBinary[] = [];
+const installedSteps = new Map<string, Promise<FontFace>>();
 async function installFonts(fonts: FontBinary[] | undefined): Promise<boolean> {
   try {
     for (const font of fonts ?? []) {
       const key = `${font.family}:${font.weight}:${font.range}`;
       if (installedFonts.has(key)) continue;
-      const face = new FontFace(font.family, font.data, { weight: font.weight, unicodeRange: font.range });
+      receivedFonts.push(font);
+      const face = new FontFace(font.family, font.data, { weight: font.weight, unicodeRange: font.range,
+        ...(font.stretch ? { stretch: font.stretch } : {}) });
       scope.fonts.add(face);
       installedFonts.set(key, face.load().catch(error => {
         installedFonts.delete(key);
@@ -86,6 +91,8 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
       ]);
       if (!loaded) throw new Error('worker could not prepare its fonts');
     }
+    const steps = widthSteps(request.settings.widthFlex ?? 0);
+    if (steps.length) await installWidthSteps([...receivedFonts, ...fontBinaries()], steps, scope.fonts, installedSteps);
     const fontMs = performance.now() - start;
     const key = `${request.typeface}:${request.settings.fontSize}:${request.direction}`;
     if (key !== fontKey) {
@@ -95,7 +102,7 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
     const countBefore = cached.calls;
     const timeBefore = cached.duration;
     const searchStart = performance.now();
-    const result = compose(request.paragraphs, cached.measure, request.settings);
+    const result = compose(request.paragraphs, cached.measure, request.settings, cached.measureAt);
     const compositionMs = performance.now() - searchStart;
     const measureMs = cached.duration - timeBefore;
     cached.trim();

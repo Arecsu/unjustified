@@ -4,7 +4,7 @@ import appTemplate from './app.html?raw';
 import { icon } from './icons';
 import { samples } from './samples';
 import { rangeMarkup } from './ui-template';
-import { families, loadFonts, fontLanguages, fontBinaries } from './fonts';
+import { families, loadFonts, fontLanguages, fontBinaries, installWidthSteps, widthRange, widthSteps } from './fonts';
 import { createMeasure } from './measure';
 import type { Typeface } from './fonts';
 import type { ComposeRequest, ComposeResponse, WorkerResponse } from './protocol';
@@ -33,7 +33,7 @@ const MAX_CHARACTERS = 30000;
  */
 const RESERVE_NATIVE_HEIGHT = false;
 
-const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, kashida: 0, protectEndings: true } satisfies Settings;
+const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, kashida: 0, widthFlex: 0, protectEndings: true } satisfies Settings;
 let settings: Settings = { ...defaults };
 let paragraphs = samples.editorial.split('\n\n');
 let typeface: Typeface = 'serif';
@@ -76,6 +76,16 @@ $('#mobile-controls-toggle').addEventListener('click', event => {
   $('.controls').classList.toggle('expanded', expanded);
 });
 
+const typefaceNames: Record<Typeface, string> = { serif: 'Source Serif 4', classic: 'Georgia', sans: 'DM Sans',
+  roboto: 'Roboto Flex', japanese: 'Noto Sans JP', arabic: 'Noto Sans Arabic' };
+/** Width flex follows the typeface: enabled only with a width axis, read from its faces. */
+function updateWidthUI() {
+  const range = widthRange(typeface);
+  $<HTMLInputElement>('#width-flex').disabled = !range;
+  $('#width-flex-note').textContent = range
+    ? `Condenses lines along ${typefaceNames[typeface]}'s width axis (down to ${range[0]}%), in whole steps.`
+    : `${typefaceNames[typeface]} has no width axis. Try Roboto Flex or Noto Sans Arabic.`;
+}
 function updateScriptUI() {
   const allArabic = paragraphs.every(hasArabic);
   for (const id of ['tracking-min', 'tracking-max']) $<HTMLInputElement>(`#${id}`).disabled = allArabic;
@@ -104,6 +114,8 @@ function updateScriptUI() {
   }
   const label = lang === 'ja' ? '日本語' : lang === 'ar' ? 'العربية' : 'English';
   $('#language-note').textContent = `${label} · ${direction === 'auto' ? 'automatic paragraph direction' : `${direction.toUpperCase()} override`}. Only fonts supporting this language are listed. Mixed-script passages may use separate Noto faces.`;
+  // After any automatic typeface change above.
+  updateWidthUI();
 }
 function refreshCanvas() {
   updateScriptUI();
@@ -216,6 +228,12 @@ function ensureWorker(): Worker | undefined {
  * a short document still renders immediately, and the page is never left saying
  * "Considering the possibilities…" forever.
  */
+/** Width-step faces for main-thread measurement; the worker installs its own. */
+const pageSteps = new Map<string, Promise<FontFace>>();
+async function composeHere(request: ComposeRequest) {
+  await installWidthSteps(fontBinaries(), widthSteps(request.settings.widthFlex ?? 0), document.fonts, pageSteps);
+  acceptResponse(composeOnMainThread(request));
+}
 function composeOnMainThread(request: ComposeRequest): ComposeResponse {
   const started = performance.now();
   const key = `${request.typeface}:${request.settings.fontSize}:${request.direction}`;
@@ -224,7 +242,7 @@ function composeOnMainThread(request: ComposeRequest): ComposeResponse {
     fallbackKey = key;
   }
   // Tracking weights and measure change the search, not the measurement cache.
-  const result = compose(request.paragraphs, fallbackMeasure.measure, request.settings);
+  const result = compose(request.paragraphs, fallbackMeasure.measure, request.settings, fallbackMeasure.measureAt);
   const elapsed = performance.now() - started;
   workerState.fallback = true;
   Object.assign(window, { __worker: workerState });
@@ -238,7 +256,8 @@ async function recompute(cold = false, scheduled = performance.now()): Promise<R
   completion?.(undefined); completion = undefined;
   const id = ++requestId;
   const revision = activeRevision = canvasRevision;
-  const input = { paragraphs, settings: { ...settings }, typeface, direction };
+  // Width flex only applies to a typeface with a width axis.
+  const input = { paragraphs, settings: { ...settings, widthFlex: widthRange(typeface) ? settings.widthFlex : 0 }, typeface, direction };
   const started = performance.now();
   const mode = cold || !worker ? 'cold' : 'warm';
   busy = true;
@@ -280,7 +299,7 @@ async function recompute(cold = false, scheduled = performance.now()): Promise<R
     const activeWorker = ensureWorker();
     if (!activeWorker) {
       // No worker available at all: compose here so the page still works.
-      acceptResponse(composeOnMainThread(request));
+      void composeHere(request);
       return await completed;
     }
     // Module evaluation can suspend before onmessage is installed. Posting
@@ -300,7 +319,7 @@ async function recompute(cold = false, scheduled = performance.now()): Promise<R
       workerDead = true;
       workerState.dead = true;
       worker?.terminate(); worker = undefined;
-      acceptResponse(composeOnMainThread(request));
+      void composeHere(request);
       toast('Composed on the main thread: the worker did not respond.');
     }, 2500);
     return await completed;
@@ -389,7 +408,7 @@ function inspect(p: number, l: number) {
   const line = current.paragraphs[p]?.lines[l]; if (!line) return;
   optEl.querySelectorAll('.inspected').forEach(el => el.classList.remove('inspected'));
   optEl.querySelector(`[data-paragraph="${p}"][data-line="${l}"]`)?.classList.add('inspected');
-  $('#line-inspector').innerHTML = `<span class="inspector-label">¶ ${p + 1} / LINE ${l + 1}</span><span>${Math.round(line.width)} px <i>of ${Math.round(lastWidth)}</i></span><span>${(line.fill * 100).toFixed(1)}% fill</span><strong>${line.tracking >= 0 ? '+' : ''}${line.tracking.toFixed(4)} em</strong>${line.wordSpacing ? `<span>words ${line.wordSpacing >= 0 ? '+' : '−'}${Math.abs(line.wordSpacing).toFixed(3)} em</span>` : ''}${line.kashida ? `<span>${line.kashida} ${line.kashida === 1 ? 'tatweel' : 'tatweels'}</span>` : ''}`;
+  $('#line-inspector').innerHTML = `<span class="inspector-label">¶ ${p + 1} / LINE ${l + 1}</span><span>${Math.round(line.width)} px <i>of ${Math.round(lastWidth)}</i></span><span>${(line.fill * 100).toFixed(1)}% fill</span><strong>${line.tracking >= 0 ? '+' : ''}${line.tracking.toFixed(4)} em</strong>${line.wordSpacing ? `<span>words ${line.wordSpacing >= 0 ? '+' : '−'}${Math.abs(line.wordSpacing).toFixed(3)} em</span>` : ''}${line.kashida ? `<span>${line.kashida} ${line.kashida === 1 ? 'tatweel' : 'tatweels'}</span>` : ''}${line.stretch !== 100 ? `<span>width ${line.stretch}%</span>` : ''}`;
 }
 const controls: Record<string, { key: keyof Settings; factor: number; unit: string }> = {
   'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, measure: { key: 'width', factor: 1, unit: ' px' },
@@ -397,6 +416,7 @@ const controls: Record<string, { key: keyof Settings; factor: number; unit: stri
   rag: { key: 'rag', factor: .01, unit: '%' },
   'word-spacing': { key: 'wordSpacing', factor: .01, unit: '%' },
   kashida: { key: 'kashida', factor: 1, unit: '' },
+  'width-flex': { key: 'widthFlex', factor: .01, unit: '%' },
   firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
 };
 function formatControl(id: string, value: number, unit: string) {
@@ -418,7 +438,7 @@ for (const [id, control] of Object.entries(controls)) {
     schedule(id === 'font-size');
   });
 }
-$('#typeface').addEventListener('change', e => { typeface = (e.target as HTMLSelectElement).value as Typeface; schedule(); });
+$('#typeface').addEventListener('change', e => { typeface = (e.target as HTMLSelectElement).value as Typeface; updateWidthUI(); schedule(); });
 $('#direction').addEventListener('change', e => { direction = (e.target as HTMLSelectElement).value as DirectionPolicy; schedule(); });
 function chooseLanguage(text: string) {
   const lang = detectLanguage(text);
@@ -510,7 +530,7 @@ function snapshotKashida(text: string, count: number, escape: (text: string) => 
 $('#export').addEventListener('click', () => {
   if (!current) return;
   const escape = (text: string) => text.replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${l.tracking}em;word-spacing:${l.wordSpacing}em">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
+  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${l.tracking}em;word-spacing:${l.wordSpacing}em${l.stretch !== 100 ? `;font-stretch:${l.stretch}%` : ''}">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   const a = document.createElement('a'); a.href = url; a.download = 'unjustified.html'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000); toast('HTML snapshot exported. System-font fallback can change geometry.');

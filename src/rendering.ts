@@ -94,7 +94,7 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
         : '';
       const guide = '<span class="line-guide" aria-hidden="true"></span>';
       lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
-        + ` style="letter-spacing:${line.tracking}em;--line-width:${cssRem(line.width, root)}"`
+        + ` style="letter-spacing:${line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`
         + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
         + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
         + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}${guide}</span>`);

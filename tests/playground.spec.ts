@@ -384,3 +384,58 @@ test('kashida is disabled without Arabic text', async ({ page }) => {
   await expect(page.locator('#kashida')).toBeDisabled();
   await expect(page.locator('#kashida-note')).toContainText('Arabic text only');
 });
+
+for (const [lang, typeface] of [['en', 'roboto'], ['ar', 'arabic']] as const) {
+  test(`width flex condenses ${lang} lines and Canvas matches the DOM at each step`, async ({ page, context }) => {
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/');
+    await page.locator('#language').selectOption(lang);
+    await settled(page);
+    await page.locator('#typeface').selectOption(typeface);
+    await settled(page);
+    await expect(page.locator('#width-flex')).toBeEnabled();
+    await setRange(page, 'tracking-min', 0);
+    await setRange(page, 'tracking-max', 0);
+    await setRange(page, 'rag', 0);
+    await setRange(page, 'firmness', 100);
+    await setRange(page, 'width-flex', 30);
+    const geometry = await page.evaluate(() => {
+      const models = (window as any).__composition.result.paragraphs.flatMap((p: any) => p.lines);
+      const rendered = [...document.querySelectorAll<HTMLElement>('#optimized .composed-line')];
+      const column = document.querySelector('#optimized')!.getBoundingClientRect();
+      return {
+        stretches: models.map((l: any) => l.stretch),
+        styled: rendered.filter(el => el.style.fontStretch).length,
+        error: Math.max(...rendered.map((el, i) => Math.abs(el.querySelector('.line-text')!.getBoundingClientRect().width - models[i].width))),
+        spill: Math.max(...rendered.map(el => {
+          const box = el.querySelector('.line-text')!.getBoundingClientRect();
+          return Math.max(box.right - column.right, column.left - box.left);
+        })),
+      };
+    });
+    const condensed = geometry.stretches.filter((n: number) => n < 100);
+    // Noto Sans Arabic's axis is strong; this Roboto Flex build narrows only
+    // ~4 % at 70 %, so on the English sample condensing may never pay off.
+    if (lang === 'ar') expect(condensed.length).toBeGreaterThan(0);
+    expect(geometry.styled).toBe(condensed.length);
+    expect(geometry.stretches.every((n: number) => Number.isInteger(n) && n >= 70)).toBe(true);
+    expect(geometry.error).toBeLessThan(0.3);
+    expect(geometry.spill).toBeLessThan(0.5);
+    const expected = await page.locator('#baseline p').allTextContents();
+    await page.evaluate(() => {
+      const range = document.createRange(); range.selectNodeContents(document.querySelector('#optimized')!);
+      getSelection()!.removeAllRanges(); getSelection()!.addRange(range);
+    });
+    await page.keyboard.press('ControlOrMeta+c');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected.join('\n\n'));
+  });
+}
+
+test('width flex is disabled for a typeface without a width axis', async ({ page }) => {
+  await page.goto('/');
+  await settled(page);
+  await expect(page.locator('#width-flex')).toBeDisabled();
+  await expect(page.locator('#width-flex-note')).toContainText('Source Serif 4 has no width axis');
+  await page.locator('#typeface').selectOption('roboto');
+  await expect(page.locator('#width-flex')).toBeEnabled();
+});

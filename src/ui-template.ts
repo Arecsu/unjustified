@@ -4,6 +4,7 @@ const ranges = {
   rag: ['Room for the rag', 0, 18, 5.5, '%', 'Tighter|Looser', 0.5],
   'word-spacing': ['Word spacing flex', 0, 50, 0, '%', 'Fixed|Flexible', 5],
   kashida: ['Kashida per line', 0, 4, 0, '', 'Off|4 tatweels', 1],
+  'width-flex': ['Width flex', 0, 40, 0, '%', 'Natural|Condensed', 1],
   firmness: ['Edge firmness', 0, 100, 0, '%', 'Ragged|Nearly flush', 5],
   sync: ['Paragraph harmony', 0, 100, 65, '%', 'Independent|In concert', 5],
   ending: ['Minimum last line', 15, 60, 32, '%', 'A little|A little more', 1],
