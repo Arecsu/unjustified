@@ -21,6 +21,9 @@ struct State {
     bins: Vec<i32>,
     touched: Vec<usize>,
     keys: Vec<u128>,
+    kept: Vec<u32>,
+    paths: Vec<Vec<u32>>,
+    predecessors: Vec<u32>,
 }
 
 fn state() -> &'static mut State {
@@ -87,33 +90,36 @@ fn select_cheapest(paths: &mut [u32], k: usize, cost: &[f64], keys: &mut Vec<u12
     for (path, k) in paths.iter_mut().zip(keys.iter()) { *path = *k as u32; }
 }
 
-fn diversity(s: &mut State, t: &Table, paths: &[u32], count: usize, limit: usize, stride: usize) -> Vec<u32> {
+/// Fills `s.kept` with the first `limit` paths whose (depth, line start) bin
+/// has fewer than four entries so far.
+fn diversity(s: &mut State, t: &Table, paths: &[u32], count: usize, limit: usize, stride: usize) {
     // Reset only the bins the previous call touched.
     for &key in &s.touched { s.bins[key] = -1; }
     s.touched.clear();
-    let mut kept = Vec::with_capacity(limit);
+    s.kept.clear();
     for &id in &paths[..count] {
         let id_us = id as usize;
         let key = s.depth[id_us] as usize * stride + t.start(s.line[id_us] as usize);
         let seen = if s.bins[key] < 0 { s.touched.push(key); 0 } else { s.bins[key] };
         s.bins[key] = seen + 1;
-        if seen < 4 { kept.push(id); }
-        if kept.len() >= limit { break; }
+        if seen < 4 { s.kept.push(id); }
+        if s.kept.len() >= limit { break; }
     }
-    kept
 }
 
-fn prune(s: &mut State, t: &Table, mut paths: Vec<u32>, limit: usize, stride: usize) -> Vec<u32> {
-    if paths.is_empty() { return paths; }
+/// Prunes `paths` in place.
+fn prune(s: &mut State, t: &Table, paths: &mut Vec<u32>, limit: usize, stride: usize) {
+    if paths.is_empty() { return; }
     let prefix = paths.len().min(limit * 4);
-    select_cheapest(&mut paths, prefix, &s.cost, &mut s.keys);
-    let mut kept = diversity(s, t, &paths, prefix, limit, stride);
-    if kept.len() < limit && prefix < paths.len() {
+    select_cheapest(paths, prefix, &s.cost, &mut s.keys);
+    diversity(s, t, paths, prefix, limit, stride);
+    if s.kept.len() < limit && prefix < paths.len() {
         let all = paths.len();
-        select_cheapest(&mut paths, all, &s.cost, &mut s.keys);
-        kept = diversity(s, t, &paths, all, limit, stride);
+        select_cheapest(paths, all, &s.cost, &mut s.keys);
+        diversity(s, t, paths, all, limit, stride);
     }
-    kept
+    paths.clear();
+    paths.extend_from_slice(&s.kept);
 }
 
 /// Runs the search over `lines` rows of input; returns how many layouts were
@@ -129,16 +135,17 @@ pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size
     s.touched.clear();
     s.prev.clear(); s.depth.clear(); s.cost.clear(); s.line.clear();
     s.prev.push(-1); s.depth.push(0); s.cost.push(0.0); s.line.push(-1);
-    let mut paths: Vec<Vec<u32>> = vec![Vec::new(); total + 1];
+    let mut paths = core::mem::take(&mut s.paths);
+    for bucket in paths.iter_mut() { bucket.clear(); }
+    paths.resize_with(total + 1, Vec::new);
     paths[0].push(0);
+    let mut predecessors = core::mem::take(&mut s.predecessors);
     let mut explored = 0.0;
     let mut line = 0;
     for start in 0..total {
-        if start > 0 {
-            let pending = core::mem::take(&mut paths[start]);
-            paths[start] = prune(s, &t, pending, beam, stride);
-        }
-        let predecessors = core::mem::take(&mut paths[start]);
+        if start > 0 { prune(s, &t, &mut paths[start], beam, stride); }
+        // Swap out rather than borrow: the loop pushes into later buckets.
+        core::mem::swap(&mut predecessors, &mut paths[start]);
         while line < lines && t.start(line) == start {
             let end = t.col(1, line) as usize;
             let last = end == total;
@@ -155,15 +162,13 @@ pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size
                 paths[end].push(id);
                 explored += 1.0;
             }
-            if paths[end].len() > beam * 20 {
-                let bucket = core::mem::take(&mut paths[end]);
-                paths[end] = prune(s, &t, bucket, beam * 2, stride);
-            }
+            if paths[end].len() > beam * 20 { prune(s, &t, &mut paths[end], beam * 2, stride); }
             line += 1;
         }
+        predecessors.clear();
     }
-    let last = core::mem::take(&mut paths[total]);
-    let retained = prune(s, &t, last, beam, stride);
+    prune(s, &t, &mut paths[total], beam, stride);
+    let retained = core::mem::take(&mut paths[total]);
     s.output.clear();
     for &id in &retained {
         let depth = s.depth[id as usize] as usize;
@@ -179,5 +184,153 @@ pub extern "C" fn run(lines: usize, total: usize, beam: usize, r: f64, font_size
     }
     s.explored = explored;
     s.input = input;
-    retained.len()
+    let count = retained.len();
+    paths[total] = retained;
+    s.paths = paths;
+    s.predecessors = predecessors;
+    count
+}
+
+// ---------------------------------------------------------------------------
+// Document stage: a port of `composeCandidates` (src/optimizer.ts). Each
+// frontier state keeps running moments of the six shape features, so the
+// pairwise term is O(1) per insertion.
+
+const FEATURES: usize = 6;
+const WEIGHTS: [f64; FEATURES] = [2.0, 2.0, 0.25, 0.25, 0.25, 0.25];
+const EMPTY: u8 = 0;
+const HAS_BODY: u8 = 2;
+/// Per layout: cost, kind, six features.
+const LAYOUT_COLUMNS: usize = 2 + FEATURES;
+
+#[derive(Clone, Copy, Default)]
+struct DocState {
+    parent: u32,
+    layout: u32,
+    cost: f64,
+    count: f64,
+    body_count: f64,
+    sum0: f64,
+    sum_sq0: f64,
+    sum_body: [f64; FEATURES - 1],
+    sum_sq_body: [f64; FEATURES - 1],
+}
+
+static mut DOC: Option<DocBuffers> = None;
+#[derive(Default)]
+struct DocBuffers { input: Vec<f64>, output: Vec<f64>, keys: Vec<u128>, generations: Vec<Vec<DocState>> }
+fn doc() -> &'static mut DocBuffers {
+    unsafe { (*core::ptr::addr_of_mut!(DOC)).get_or_insert_with(DocBuffers::default) }
+}
+
+/// Room for the layout count of each paragraph, then `layouts` rows of
+/// LAYOUT_COLUMNS values.
+#[no_mangle]
+pub extern "C" fn doc_input(paragraphs: usize, layouts: usize) -> *mut f64 {
+    let d = doc();
+    d.input.resize(paragraphs + layouts * LAYOUT_COLUMNS, 0.0);
+    d.input.as_mut_ptr()
+}
+#[no_mangle]
+pub extern "C" fn doc_output() -> *const f64 { doc().output.as_ptr() }
+
+/// `pairCost`: the factor scales the whole sum.
+fn pair_cost(state: &DocState, f: &[f64], kind: u8, factor: f64) -> f64 {
+    if kind == EMPTY { return 0.0; }
+    let v = f[0];
+    let mut cost = WEIGHTS[0] * (state.count * v * v - 2.0 * v * state.sum0 + state.sum_sq0);
+    if kind == HAS_BODY {
+        for i in 1..FEATURES {
+            let value = f[i];
+            cost += WEIGHTS[i]
+                * (state.body_count * value * value - 2.0 * value * state.sum_body[i - 1] + state.sum_sq_body[i - 1]);
+        }
+    }
+    factor * cost
+}
+
+/// `childState`: the factor scales each term.
+fn child_state(parent: &DocState, parent_index: u32, layout: u32, layout_cost: f64, f: &[f64], kind: u8, factor: f64) -> DocState {
+    let mut next = *parent;
+    next.parent = parent_index;
+    next.layout = layout;
+    let mut cost = parent.cost + layout_cost;
+    if kind != EMPTY {
+        let v = f[0];
+        cost += factor * WEIGHTS[0] * (next.count * v * v - 2.0 * v * next.sum0 + next.sum_sq0);
+        next.count += 1.0; next.sum0 += v; next.sum_sq0 += v * v;
+        if kind == HAS_BODY {
+            for i in 1..FEATURES {
+                let value = f[i];
+                let sum = parent.sum_body[i - 1];
+                let sum_sq = parent.sum_sq_body[i - 1];
+                cost += factor * WEIGHTS[i] * (parent.body_count * value * value - 2.0 * value * sum + sum_sq);
+                next.sum_body[i - 1] = sum + value;
+                next.sum_sq_body[i - 1] = sum_sq + value * value;
+            }
+            next.body_count += 1.0;
+        }
+    }
+    next.cost = cost;
+    next
+}
+
+/// Chooses one layout per paragraph. Output: the chosen layout index for each
+/// paragraph, then the number of combinations scored.
+#[no_mangle]
+pub extern "C" fn joint(paragraphs: usize, factor: f64) -> usize {
+    let d = doc();
+    let input = core::mem::take(&mut d.input);
+    let counts: Vec<usize> = input[..paragraphs].iter().map(|&n| n as usize).collect();
+    let rows = &input[paragraphs..];
+    let mut generations = core::mem::take(&mut d.generations);
+    generations.resize_with(paragraphs + 1, Vec::new);
+    for g in generations.iter_mut() { g.clear(); }
+    generations[0].push(DocState::default());
+    let mut explored = 0.0;
+    let mut offset = 0;
+    for i in 0..paragraphs {
+        let n = counts[i];
+        let limit = if paragraphs <= 3 && i < paragraphs - 1 { 1200 } else { 128 };
+        let (done, rest) = generations.split_at_mut(i + 1);
+        let frontier = &done[i];
+        // Every (state, layout) combination, keyed by (cost, insertion order):
+        // the same order as the JavaScript bounded heap.
+        d.keys.clear();
+        let mut order: u32 = 0;
+        for state in frontier.iter() {
+            for k in 0..n {
+                let row = &rows[(offset + k) * LAYOUT_COLUMNS..(offset + k + 1) * LAYOUT_COLUMNS];
+                let cost = state.cost + row[0] + pair_cost(state, &row[2..], row[1] as u8, factor);
+                d.keys.push(key(cost, order));
+                order += 1;
+            }
+        }
+        explored += order as f64;
+        let keep = limit.min(d.keys.len());
+        if keep > 0 && keep < d.keys.len() { d.keys.select_nth_unstable(keep - 1); }
+        d.keys[..keep].sort_unstable();
+        let next = &mut rest[0];
+        for &packed in &d.keys[..keep] {
+            let insertion = packed as u32 as usize;
+            let f = insertion / n;
+            let k = insertion - f * n;
+            let row = &rows[(offset + k) * LAYOUT_COLUMNS..(offset + k + 1) * LAYOUT_COLUMNS];
+            next.push(child_state(&frontier[f], f as u32, k as u32, row[0], &row[2..], row[1] as u8, factor));
+        }
+        offset += n;
+    }
+    d.output.clear();
+    d.output.resize(paragraphs + 1, 0.0);
+    // Walk back from the best final state.
+    let mut index = 0usize;
+    for i in (0..paragraphs).rev() {
+        let state = generations[i + 1][index];
+        d.output[i] = state.layout as f64;
+        index = state.parent as usize;
+    }
+    d.output[paragraphs] = explored;
+    d.input = input;
+    d.generations = generations;
+    paragraphs
 }

@@ -381,7 +381,12 @@ function transitionAt(t: LineColumns, a: number, b: number, final: boolean, r: n
 export interface SearchResult { retained: { ids: number[]; cost: number }[]; explored: number }
 /** A faster implementation of `searchLines` (WebAssembly), when one is loaded. */
 let kernel: ((t: LineColumns, total: number, beam: number, restraint: number, fontSize: number) => SearchResult) | undefined;
-export function setSearchKernel(next: typeof kernel) { kernel = next; }
+/** The document stage in WebAssembly: chosen layout index per paragraph, and
+ *  how many combinations were scored. */
+type JointKernel = (counts: Int32Array, costs: Float64Array, kinds: Uint8Array, features: Float64Array,
+  factor: number) => { chosen: number[]; explored: number };
+let jointKernel: JointKernel | undefined;
+export function setSearchKernel(next: typeof kernel, joint?: JointKernel) { kernel = next; jointKernel = next && joint; }
 
 /** Beam search over a line table, lines grouped by start in increasing order. */
 export function searchLines(t: LineColumns, total: number, beam: number, s: Settings): SearchResult {
@@ -726,6 +731,13 @@ export function composeCandidates(options: { layouts: Layout[]; explored: number
   }
 
   const factor = s.sync * 65 / Math.max(1, options.length - 1);
+  if (jointKernel && options.length) {
+    const counts = Int32Array.from(options, option => option.layouts.length);
+    const costs = Float64Array.from(options.flatMap(option => option.layouts.map(layout => layout.cost)));
+    const { chosen, explored: scored } = jointKernel(counts, costs, kinds, features, factor);
+    const paragraphs = chosen.map((k, i) => options[i].layouts[k]);
+    return { paragraphs, cost: scoreDocument(paragraphs, s), explored: explored + scored, candidates };
+  }
   const zero = new Float64Array(FEATURE_COUNT - 1);
   let frontier: DocState[] = [{
     parent: null, layout: { lines: [], cost: 0 }, cost: 0,

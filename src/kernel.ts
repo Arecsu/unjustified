@@ -12,6 +12,9 @@ interface Exports {
   output(): number;
   output_len(): number;
   explored(): number;
+  doc_input(paragraphs: number, layouts: number): number;
+  joint(paragraphs: number, factor: number): number;
+  doc_output(): number;
 }
 
 export function searchKernel(instance: WebAssembly.Instance) {
@@ -37,11 +40,29 @@ export function searchKernel(instance: WebAssembly.Instance) {
   };
 }
 
+export function jointKernel(instance: WebAssembly.Instance) {
+  const wasm = instance.exports as unknown as Exports;
+  return (counts: Int32Array, costs: Float64Array, kinds: Uint8Array, features: Float64Array, factor: number) => {
+    const paragraphs = counts.length, layouts = costs.length;
+    const pointer = wasm.doc_input(paragraphs, layouts);
+    const input = new Float64Array(wasm.memory.buffer, pointer, paragraphs + layouts * 8);
+    input.set(counts, 0);
+    for (let i = 0, o = paragraphs; i < layouts; i++, o += 8) {
+      input[o] = costs[i];
+      input[o + 1] = kinds[i];
+      input.set(features.subarray(i * 6, i * 6 + 6), o + 2);
+    }
+    wasm.joint(paragraphs, factor);
+    const out = new Float64Array(wasm.memory.buffer, wasm.doc_output(), paragraphs + 1);
+    return { chosen: Array.from(out.subarray(0, paragraphs)), explored: out[paragraphs] };
+  };
+}
+
 /** Browser: compile and install from a URL. Failure leaves the JavaScript search. */
 export async function loadSearchKernel(url: string | URL): Promise<boolean> {
   try {
     const { instance } = await WebAssembly.instantiateStreaming(fetch(url));
-    setSearchKernel(searchKernel(instance));
+    setSearchKernel(searchKernel(instance), jointKernel(instance));
     return true;
   } catch {
     return false;
