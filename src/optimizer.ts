@@ -17,6 +17,8 @@
  */
 import { trackingAdvances } from './text-metrics';
 import { segmentText, hasArabic } from './language';
+import { fitMeasure, shareGap } from './stretch';
+import type { Tool } from './stretch';
 
 export interface Settings {
   width: number;
@@ -39,6 +41,7 @@ export interface Line {
   natural: number;
   width: number;
   tracking: number; // em
+  wordSpacing: number; // em added to (or removed from) each inter-word space
   fill: number;
   overflow: boolean;
 }
@@ -63,6 +66,13 @@ const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(
 const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
 /** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
 const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
+/** Stiffness per em² of each tool. Word spacing is looser than tracking: per
+ *  unit of fill it costs about 2.5× less in ordinary English text. */
+const TRACKING_STIFFNESS = 1000;
+const WORD_STIFFNESS = 10;
+/** Reused by every `buildLine` call: the candidate loop runs it ~10⁵ times. */
+const tools: Tool[] = [{ k: 0, b: 0, min: 0, max: 0 }, { k: 0, b: 0, min: 0, max: 0 }];
+const amounts = new Float64Array(2);
 
 export const wordsOf = (text: string): string[] => text.trim().split(/\s+/u).filter(Boolean);
 
@@ -90,30 +100,35 @@ function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): 
 
 /** Build one candidate line from an already-measured natural width. */
 function buildLine(start: number, end: number, text: string, natural: number, advances: number,
-  totalWords: number, s: Settings, tracked: boolean): Line | null {
+  totalWords: number, s: Settings, tracked: boolean, spaces = 0, spaceLimit = 0): Line | null {
   // CSS tracking contributes a trailing advance too. Japanese uses grapheme
   // advances; connected Arabic paragraphs have their tracking bounds set to zero.
-  const coefficient = advances * s.fontSize / s.width;
   const naturalFill = natural / s.width;
   const final = end === totalWords;
   const only = start === 0 && final;
-  let tracking = 0;
-  if (tracked && !only && (s.trackingMin < 0 || s.trackingMax > 0)) {
-    // Minimize A(f + k·t − target)² + B·t² analytically, then clamp.
+  let tracking = 0, wordSpacing = 0;
+  if (tracked && !only) {
+    // Loosest first: word spacing, then tracking. Each moves fill by k per em.
+    const words = tools[0], track = tools[1];
+    words.k = spaces * s.fontSize / s.width;
+    words.b = WORD_STIFFNESS * restraint(s);
+    words.min = -spaceLimit; words.max = spaceLimit;
+    track.k = advances * s.fontSize / s.width;
+    track.b = TRACKING_STIFFNESS * restraint(s);
+    track.min = s.trackingMin; track.max = s.trackingMax;
     const target = final ? s.minEnding : 1 - s.rag;
     const a = final ? (s.protectEndings && naturalFill < target ? 240 : 0) : 100;
-    const b = 1000 * restraint(s);
-    tracking = clamp(a * coefficient * (target - naturalFill)
-      / (a * coefficient * coefficient + b), s.trackingMin, s.trackingMax);
-    // Use bounded negative tracking to admit a word that just barely doesn't fit.
-    if (naturalFill + coefficient * tracking > 1) {
-      tracking = Math.max(s.trackingMin, (1 - naturalFill) / coefficient);
-    }
+    shareGap(target - naturalFill, a, tools, amounts);
+    // Use bounded negative adjustment to admit a word that just barely doesn't fit.
+    fitMeasure(naturalFill, tools, amounts);
+    wordSpacing = amounts[0];
+    tracking = amounts[1];
   }
-  const width = natural + advances * tracking * s.fontSize;
+  let width = natural + advances * tracking * s.fontSize;
+  if (wordSpacing !== 0) width += spaces * wordSpacing * s.fontSize;
   const overflow = width > s.width + 0.05;
   if (overflow && end - start > 1) return null;
-  return { start, end, text, natural, width, tracking, fill: width / s.width, overflow };
+  return { start, end, text, natural, width, tracking, wordSpacing, fill: width / s.width, overflow };
 }
 
 /** Grapheme advances are immutable per string; the candidate loop asks often. */
@@ -341,7 +356,8 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         // Cannot reach the 0.50 fill floor that the search requires.
         continue;
       }
-      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true);
+      const spaces = separator ? end - start - 1 : 0;
+      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, 0);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       const cost = lineCost(line, final, start === 0 && final, s);

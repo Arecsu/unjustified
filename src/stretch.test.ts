@@ -31,6 +31,7 @@ test('one tool reproduces the original tracking expression bit for bit', () => {
     [100, 1.7, -0.03, 1000, -0.04, 0],
     [240, 0.9, 0.2, 2, -0.08, 0.08],
     [0, 2, 0.1, 1000, -0.012, 0.012],
+    [0, 2, -0.1, 1000, 0, 0.012], // −0 unclamped; a zero bound must give +0
   ]) {
     shareGap(gap, a, [{ k, b, min, max }], out);
     const original = Math.min(max, Math.max(min, a * k * gap / (a * k * k + b)));

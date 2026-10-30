@@ -35,9 +35,10 @@ export function shareGap(gap: number, a: number, tools: Tool[], out: Float64Arra
       const x = count === 1
         ? a * t.k * remaining / (a * t.k * t.k + t.b)
         : t.k / t.b * a * remaining / (1 + a * sum);
-      if (x < t.min) { out[i] = t.min; free &= ~(1 << i); clamped = true; }
-      else if (x > t.max) { out[i] = t.max; free &= ~(1 << i); clamped = true; }
-      else out[i] = x;
+      // Same clamp as the original tracking solve: it also maps −0 to +0 at a
+      // zero bound, which the bit-identical equivalence suite can see.
+      out[i] = Math.min(t.max, Math.max(t.min, x));
+      if (x < t.min || x > t.max) { free &= ~(1 << i); clamped = true; }
     }
     if (!clamped) break;
   }
