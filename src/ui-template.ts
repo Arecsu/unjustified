@@ -1,5 +1,6 @@
 const ranges = {
   'font-size': ['Type size', 14, 26, 19, ' px', 'Small|Large', 1],
+  'letter-spacing': ['Letter spacing', -0.05, 0.1, 0, ' em', 'Tighter|Looser', 0.005],
   measure: ['Column width', 240, 620, 390, ' px', 'Narrow|Wide', 2],
   rag: ['Room for the rag', 0, 18, 5.5, '%', 'Tighter|Looser', 0.5],
   'word-spacing': ['Word spacing flex', 0, 50, 0, '%', 'Fixed|Flexible', 5],

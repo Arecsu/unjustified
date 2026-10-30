@@ -479,3 +479,42 @@ test('the controls stay in view and scroll on their own while the text scrolls',
   await controls.evaluate(el => { el.scrollTop = el.scrollHeight; });
   await expect(page.locator('#visualizers')).toBeInViewport();
 });
+
+test('base letter spacing applies to both columns and keeps Canvas and DOM in agreement', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  for (const lang of ['en', 'ar']) {
+    await page.goto('/');
+    await page.locator('#language').selectOption(lang);
+    await settled(page);
+    await page.locator('#letter-spacing').evaluate(el => {
+      (el as HTMLInputElement).value = '0.05';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await settled(page);
+    await expect(page.locator('#letter-spacing-value')).toHaveText('+0.050 em');
+    const geometry = await page.evaluate(() => {
+      const models = (window as any).__composition.result.paragraphs.flatMap((p: any) => p.lines);
+      const rendered = [...document.querySelectorAll<HTMLElement>('#optimized .composed-line')];
+      return {
+        error: Math.max(...rendered.map((el, i) => Math.abs(el.querySelector('.line-text')!.getBoundingClientRect().width - models[i].width))),
+        native: getComputedStyle(document.querySelector('#baseline p')!).letterSpacing,
+        composed: rendered[0].style.letterSpacing,
+      };
+    });
+    expect(geometry.error).toBeLessThan(0.3);
+    if (lang === 'ar') {
+      expect(geometry.native).toMatch(/^(0px|normal)$/);
+      expect(geometry.composed).toMatch(/^0(em|px)?$/);
+    } else {
+      expect(parseFloat(geometry.native)).toBeGreaterThan(0.5);
+      expect(parseFloat(geometry.composed)).toBeGreaterThan(0.03);
+    }
+    const expected = await page.locator('#baseline p').allTextContents();
+    await page.evaluate(() => {
+      const range = document.createRange(); range.selectNodeContents(document.querySelector('#optimized')!);
+      getSelection()!.removeAllRanges(); getSelection()!.addRange(range);
+    });
+    await page.keyboard.press('ControlOrMeta+c');
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(expected.join('\n\n'));
+  }
+});

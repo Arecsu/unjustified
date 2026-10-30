@@ -111,6 +111,7 @@
 }
 .reading-column {
   width: min(var(--measure),100%);
+  letter-spacing: var(--base-tracking, 0);
   margin: 0 auto;
   font-family: var(--reading-font);
   font-size: var(--type-size);

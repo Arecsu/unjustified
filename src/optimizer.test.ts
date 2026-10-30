@@ -271,3 +271,11 @@ test('condensing lets lines hold more words', () => {
   const after = compose(texts, measure, { ...tight, widthFlex: 0.4 }, measureAt).paragraphs.reduce((n, p) => n + p.lines.length, 0);
   assert.ok(after <= before, `${after} lines vs ${before}`);
 });
+
+test('base letter-spacing is a fixed advance per grapheme, and Arabic ignores it', () => {
+  const s = { ...settings, letterSpacing: 0.03 };
+  const spaced = (text: string) => measure(text) + trackingAdvances(text) * 0.03 * settings.fontSize;
+  assert.deepEqual(compose(texts, measure, s), compose(texts, spaced, settings));
+  const arabic = samples.arabic.split('\n\n');
+  assert.deepEqual(compose(arabic, measure, s), compose(arabic, measure, settings));
+});

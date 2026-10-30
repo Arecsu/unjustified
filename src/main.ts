@@ -33,7 +33,7 @@ const MAX_CHARACTERS = 30000;
  */
 const RESERVE_NATIVE_HEIGHT = false;
 
-const defaults = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, kashida: 0, widthFlex: 0, protectEndings: true } satisfies Settings;
+const defaults = { width: 390, fontSize: 19, letterSpacing: 0, trackingMin: -0.012, trackingMax: 0.012, rag: 0.055, minEnding: 0.32, sync: 0.65, firmness: 0, wordSpacing: 0, kashida: 0, widthFlex: 0, protectEndings: true } satisfies Settings;
 let settings: Settings = { ...defaults };
 let paragraphs = samples.editorial.split('\n\n');
 let typeface: Typeface = 'serif';
@@ -123,6 +123,7 @@ function refreshCanvas() {
   // is read back; the actual width is re-read below.
   previews.style.setProperty('--measure', cssRem(settings.width));
   previews.style.setProperty('--type-size', cssRem(settings.fontSize));
+  previews.style.setProperty('--base-tracking', `${settings.letterSpacing}em`);
   previews.style.setProperty('--reading-font', families[typeface]);
   for (const parent of [baseEl, optEl]) {
     const fragment = document.createDocumentFragment();
@@ -372,7 +373,7 @@ function renderResult(response: ComposeResponse) {
   // composed block cannot change the document height: this is what removes the
   // layout shift when a paragraph gains or loses a line.
   renderOptimized(optEl, result.paragraphs, paragraphs, baseline, {
-    direction, inspection, onInspect: inspect,
+    direction, inspection, onInspect: inspect, letterSpacing: settings.letterSpacing,
     highlightMoves: $<HTMLInputElement>('#changes').checked,
     reservePixels: RESERVE_NATIVE_HEIGHT ? nativeHeights : undefined,
     reserveHeight: RESERVE_NATIVE_HEIGHT ? nativeColumnHeight : undefined,
@@ -421,7 +422,7 @@ function inspect(p: number, l: number) {
   $('#line-inspector').innerHTML = `<span class="inspector-label">¶ ${p + 1} / LINE ${l + 1}</span><span>${Math.round(line.width)} px <i>of ${Math.round(lastWidth)}</i></span><span>${(line.fill * 100).toFixed(1)}% fill</span><strong>${line.tracking >= 0 ? '+' : ''}${line.tracking.toFixed(4)} em</strong>${line.wordSpacing ? `<span>words ${line.wordSpacing >= 0 ? '+' : '−'}${Math.abs(line.wordSpacing).toFixed(3)} em</span>` : ''}${line.kashida ? `<span>${line.kashida} ${line.kashida === 1 ? 'tatweel' : 'tatweels'}</span>` : ''}${line.stretch !== 100 ? `<span>width ${line.stretch}%</span>` : ''}`;
 }
 const controls: Record<string, { key: keyof Settings; factor: number; unit: string }> = {
-  'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, measure: { key: 'width', factor: 1, unit: ' px' },
+  'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, 'letter-spacing': { key: 'letterSpacing', factor: 1, unit: ' em' }, measure: { key: 'width', factor: 1, unit: ' px' },
   'tracking-min': { key: 'trackingMin', factor: 1, unit: ' em' }, 'tracking-max': { key: 'trackingMax', factor: 1, unit: ' em' },
   rag: { key: 'rag', factor: .01, unit: '%' },
   'word-spacing': { key: 'wordSpacing', factor: .01, unit: '%' },
@@ -430,7 +431,7 @@ const controls: Record<string, { key: keyof Settings; factor: number; unit: stri
   firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
 };
 function formatControl(id: string, value: number, unit: string) {
-  return id.startsWith('tracking-') ? `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(3)}${unit}` : `${value}${unit}`;
+  return id.startsWith('tracking-') || id === 'letter-spacing' ? `${value < 0 ? '−' : '+'}${Math.abs(value).toFixed(3)}${unit}` : `${value}${unit}`;
 }
 function updateTrackingRange() {
   $('.tracking-sliders').style.setProperty('--tracking-start', `${(settings.trackingMin + .08) / .16 * 100}%`);
@@ -443,9 +444,9 @@ for (const [id, control] of Object.entries(controls)) {
     $(`#${id}-value`).textContent = formatControl(id, n, control.unit);
     if (id.startsWith('tracking-')) updateTrackingRange();
     if (id === 'sync') $('#harmony-note').textContent = n === 0 ? 'Independent: each paragraph chooses its own lowest-cost layout.' : 'Joint selection. Shared contours and endings influence the choice.';
-    // Tracking, rag, firmness, harmony and ending weights re-rank the same text; only a
-    // type-size change invalidates the paragraph geometry.
-    schedule(id === 'font-size');
+    // Tracking, rag, firmness, harmony and ending weights re-rank the same text;
+    // type size and base letter-spacing change the paragraph geometry.
+    schedule(id === 'font-size' || id === 'letter-spacing');
   });
 }
 $('#typeface').addEventListener('change', e => { typeface = (e.target as HTMLSelectElement).value as Typeface; updateWidthUI(); schedule(); });
@@ -476,7 +477,7 @@ for (const id of ['guides', 'changes', 'inspect']) $(`#${id}`).addEventListener(
     // Per-word spans are only built when highlighting is on, so re-paint from
     // the cached composition instead of paying for another search.
     renderOptimized(optEl, current.paragraphs, paragraphs, baseline, {
-      direction, inspection, highlightMoves: checked, onInspect: inspect,
+      direction, inspection, highlightMoves: checked, onInspect: inspect, letterSpacing: activeRequest?.settings.letterSpacing,
       reservePixels: RESERVE_NATIVE_HEIGHT ? nativeHeights : undefined,
       reserveHeight: RESERVE_NATIVE_HEIGHT ? nativeColumnHeight : undefined,
     });
@@ -560,7 +561,7 @@ function snapshotKashida(text: string, count: number, escape: (text: string) => 
 $('#export').addEventListener('click', () => {
   if (!current) return;
   const escape = (text: string) => text.replace(/[&<>\"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${l.tracking}em;word-spacing:${l.wordSpacing}em${l.stretch !== 100 ? `;font-stretch:${l.stretch}%` : ''}">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
+  const html = `<!doctype html><html lang="${detectLanguage(paragraphs.join(' '))}"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Unjustified composition</title><style>body{margin:2.5rem}article{width:${lastWidth / 16}rem;max-width:100%;font: ${settings.fontSize / 16}rem/1.55 sans-serif;text-align:start}p{margin:0 0 1.25em;line-height:0}p>span{display:inline-block;width:100%;white-space:pre;line-height:1.55}.kashida{user-select:none;-webkit-user-select:none}@media(max-width:${(lastWidth + 80) / 16}rem){p{line-height:1.55}p>span{display:inline;white-space:normal;letter-spacing:normal!important;word-spacing:normal!important}}</style><article>${current.paragraphs.map((p, i) => `<p dir="${directionFor(paragraphs[i], direction)}">${p.lines.map(l => `<span style="letter-spacing:${(hasArabic(paragraphs[i]) ? 0 : settings.letterSpacing ?? 0) + l.tracking}em;word-spacing:${l.wordSpacing}em${l.stretch !== 100 ? `;font-stretch:${l.stretch}%` : ''}">${l.kashida ? snapshotKashida(l.text, l.kashida, escape) : escape(l.text)}${wordsOf(paragraphs[i]).length > 1 && detectLanguage(paragraphs[i]) !== 'ja' ? ' ' : ''}</span>`).join('')}</p>`).join('')}</article><!-- Static snapshot with system-font fallback. Recompose for production. --></html>`;
   const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
   const a = document.createElement('a'); a.href = url; a.download = 'unjustified.html'; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000); toast('HTML snapshot exported. System-font fallback can change geometry.');

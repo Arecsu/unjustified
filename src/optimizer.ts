@@ -35,6 +35,9 @@ export interface Settings {
   /** 0–0.5. How far each inter-word space may shrink or stretch, as a fraction
    *  of its natural width. 0 disables word-spacing adjustment. */
   wordSpacing?: number;
+  /** Base CSS letter-spacing of the text, in em. Tracking adjusts relative to
+   *  it. Arabic paragraphs ignore it. */
+  letterSpacing?: number;
   /** 0–4. Most tatweels a line of Arabic may receive. 0 disables kashida. */
   kashida?: number;
   /** 0–0.4. How far lines may condense along the font's width axis. Needs a
@@ -446,6 +449,13 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   // Preserve joining scripts: optimize Arabic word breaks, never letter-space
   // its connected glyphs. Latin/Japanese paragraphs retain the chosen bounds.
   if (hasArabic(text)) s = { ...s, trackingMin: 0, trackingMax: 0 };
+  // Base letter-spacing adds a fixed advance per grapheme, like tracking.
+  const base = hasArabic(text) ? 0 : s.letterSpacing ?? 0;
+  if (base) {
+    const plain = measure, plainAt = measureAt;
+    measure = value => plain(value) + advancesOf(value) * base * s.fontSize;
+    if (plainAt) measureAt = (value, stretch) => plainAt(value, stretch) + advancesOf(value) * base * s.fontSize;
+  }
   const { units: words, separator } = segmentText(text);
   const total = words.length;
   if (!total) return { layouts: [{ lines: [], cost: 0 }], explored: 0 };

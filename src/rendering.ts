@@ -33,6 +33,8 @@ export interface RenderOptions {
   /** Reserved column height, in CSS pixels, so the card cannot change size. */
   reserveHeight?: number;
   onInspect?: (paragraph: number, line: number) => void;
+  /** Base letter-spacing in em; line tracking is relative to it. Not for Arabic. */
+  letterSpacing?: number;
 }
 
 /**
@@ -64,6 +66,7 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
     const { units, separator } = segmentText(text);
     const lang = detectLanguage(text);
     const dir = directionFor(text, direction);
+    const base = hasArabic(text) ? 0 : options.letterSpacing ?? 0;
     // One pass over the baseline instead of a linear scan per word.
     const unitLine = highlight ? new Int32Array(units.length).fill(-1) : undefined;
     if (unitLine) {
@@ -94,7 +97,7 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
         : '';
       const guide = '<span class="line-guide" aria-hidden="true"></span>';
       lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
-        + ` style="letter-spacing:${line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`
+        + ` style="letter-spacing:${base + line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`
         + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
         + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
         + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}${guide}</span>`);
