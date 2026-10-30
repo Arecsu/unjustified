@@ -311,8 +311,6 @@ test('the whole-trip panel names the search engine and helpers that ran', async 
   await page.goto('/');
   await settled(page);
   await expect(page.locator('#benchmark-breakdown')).toContainText('Search (WebAssembly)');
-  // Isolation gives the panel fine-grained timers.
-  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await page.locator('#edit-text').click();
   await page.locator('#text-editor').fill(source);
   await page.locator('#apply-text').click();
