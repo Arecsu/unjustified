@@ -60,7 +60,7 @@ function createLine(words: string[], start: number, end: number, measure: Measur
   const width = natural + advances * tracking * s.fontSize;
   const overflow = width > s.width + 0.05;
   if (overflow && end - start > 1) return null;
-  return { start, end, text, natural, width, tracking, wordSpacing: 0, kashida: 0, kashidaWidth: 0, stretch: 100, fill: width / s.width, overflow };
+  return { start, end, text, natural, width, tracking, wordSpacing: 0, kashida: 0, kashidaWidth: 0, stretch: 100, hyphen: false, fill: width / s.width, overflow };
 }
 
 function prune(paths: Layout[], limit: number): Layout[] {
