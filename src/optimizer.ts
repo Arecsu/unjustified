@@ -80,16 +80,13 @@ const clamp = (n: number, low: number, high: number) => Math.min(high, Math.max(
 const restraint = (s: Settings) => Math.max(0.002, square(1 - (s.firmness ?? 0)));
 /** Tolerance around the rag target: 0.10 by default, 0.02 at full firmness. */
 const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
-/** Stiffness per em² of each tool. Word spacing is looser than tracking: per
- *  unit of fill it costs about 2.5× less in ordinary English text. */
-const TRACKING_STIFFNESS = 1000;
+/** Tool stiffness, loosest to stiffest per unit of fill: word spacing (em²),
+ *  kashida (em² of tatweel), width (percentage point²), tracking (em²). */
 const WORD_STIFFNESS = 10;
-/** Kashida sits between the two: with ~6 spaces in an Arabic line it costs
- *  about 1.8× word spacing per unit of fill. */
 const KASHIDA_STIFFNESS = 0.5;
-/** Per percentage point of font-stretch: stiffer than kashida per unit of fill. */
 const WIDTH_STIFFNESS = 0.015;
-/** Reused by every `buildLine` call: the candidate loop runs it ~10⁵ times.
+const TRACKING_STIFFNESS = 1000;
+/** Reused by every `buildLine` call: the candidate loop is hot.
  *  Loosest first: word spacing, kashida (in tatweels), width (in steps), tracking. */
 const tools: Tool[] = [0, 1, 2, 3].map(() => ({ k: 0, b: 0, min: 0, max: 0 }));
 const amounts = new Float64Array(4);

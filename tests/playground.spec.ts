@@ -414,8 +414,7 @@ for (const [lang, typeface] of [['en', 'roboto'], ['ar', 'arabic']] as const) {
       };
     });
     const condensed = geometry.stretches.filter((n: number) => n < 100);
-    // Noto Sans Arabic's axis is strong; this Roboto Flex build narrows only
-    // ~4 % at 70 %, so on the English sample condensing may never pay off.
+    // Roboto Flex's width axis is mild, so English lines may never condense.
     if (lang === 'ar') expect(condensed.length).toBeGreaterThan(0);
     expect(geometry.styled).toBe(condensed.length);
     expect(geometry.stretches.every((n: number) => Number.isInteger(n) && n >= 70)).toBe(true);
