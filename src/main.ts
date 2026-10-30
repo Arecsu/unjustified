@@ -353,6 +353,15 @@ function visualizers() {
   renderVisualizers(baseEl, baseline, current?.paragraphs ?? [], enabled, settings);
   renderVisualizers(optEl, current?.paragraphs ?? [], baseline, enabled, settings);
 }
+/** Runs just after the browser produces the next frame: a task queued from
+ *  inside requestAnimationFrame runs once that frame's rendering is done. */
+function afterNextPaint(callback: () => void) {
+  requestAnimationFrame(() => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => callback();
+    channel.port2.postMessage(null);
+  });
+}
 function renderResult(response: ComposeResponse) {
   const renderStart = performance.now();
   const result = response.result!, width = lastWidth;
@@ -389,7 +398,7 @@ function renderResult(response: ComposeResponse) {
   Object.assign(window, { __composition: data });
   const context = { ...run }, resolve = completion;
   const id = response.id;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
+  afterNextPaint(() => {
     if (id !== requestId) { resolve?.(undefined); return; }
     const totalMs = performance.now() - context.started;
     const fontMs = context.mainFontMs + response.fontMs;
@@ -402,7 +411,7 @@ function renderResult(response: ComposeResponse) {
     Object.assign(data, { timing });
     resolve?.(timing);
     if (completion === resolve) completion = undefined;
-  }));
+  });
 }
 function inspect(p: number, l: number) {
   if (!inspection || !current) return;

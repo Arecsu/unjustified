@@ -81,7 +81,7 @@ measure (`pnpm bench`):
 | DOM nodes in the composed column | 3,478 | 1,027 |
 
 The whole trip (font readiness on both threads, native geometry, Canvas
-measurement, search, DOM updates and two animation frames) is still reported in
+measurement, search, DOM updates and the next paint) is still reported in
 the UI. Input dispatches immediately, with at most one in-flight solve and one latest pending input; pending-input wait is reported separately. Method,
 per-stage breakdown, integration guidance, the layout-shift measurements and the
 measured reason there is no WASM path are in
