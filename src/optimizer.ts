@@ -31,6 +31,9 @@ export interface Settings {
   /** 0–1. Trades tracking restraint for an even edge: 0 is the ragged default,
    *  1 spends the tracking bounds freely to pull lines onto the rag target. */
   firmness?: number;
+  /** 0–0.5. How far each inter-word space may shrink or stretch, as a fraction
+   *  of its natural width. 0 disables word-spacing adjustment. */
+  wordSpacing?: number;
   protectEndings: boolean;
 }
 
@@ -78,7 +81,8 @@ export const wordsOf = (text: string): string[] => text.trim().split(/\s+/u).fil
 
 function lineCost(line: Line, final: boolean, only: boolean, settings: Settings): number {
   if (line.overflow) return 500 + square(line.fill - 1) * 100;
-  const track = 0.10 * restraint(settings) * square(line.tracking / 0.01);
+  const track = 0.10 * restraint(settings) * square(line.tracking / 0.01)
+    + (line.wordSpacing !== 0 ? WORD_STIFFNESS * restraint(settings) * square(line.wordSpacing) : 0);
   if (only) return track;
   if (final) {
     // Short endings are a soft constraint: impossible cases remain renderable.
@@ -95,6 +99,7 @@ function transition(a: Line | undefined, b: Line, final: boolean, s: Settings): 
   if (!a) return 0;
   // Keep line-to-line tracking changes subtle. Final lines are allowed to relax.
   return 0.035 * restraint(s) * square((a.tracking - b.tracking) / 0.01)
+    + (a.wordSpacing !== b.wordSpacing ? 0.35 * WORD_STIFFNESS * restraint(s) * square(a.wordSpacing - b.wordSpacing) : 0)
     + (final ? 0 : 0.16 * square((a.fill - b.fill) / 0.12));
 }
 
@@ -317,6 +322,8 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   const unitWidths = new Float64Array(total);
   for (let i = 0; i < total; i++) unitWidths[i] = measure(words[i]);
   const spaceWidth = separator ? measure(separator) : 0;
+  // Word-spacing bound in em. Japanese has no separator, so no spaces to adjust.
+  const spaceLimit = (s.wordSpacing ?? 0) * spaceWidth / s.fontSize;
 
   const paths: number[][] = Array.from({ length: total + 1 }, () => []);
   const pool = new PathPool(1024 + beam * 24);
@@ -345,10 +352,12 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         estimate += unitWidths[index] + spaceWidth;
       }
       const final = end === total;
-      // Tracking can move a line's width: allow for the full bounded amount.
+      const spaces = separator ? end - start - 1 : 0;
+      // Tracking and word spacing can move a line's width: allow for the full bounded amount.
       const trackingPx = advances * s.fontSize;
-      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0);
-      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0);
+      const spacingPx = spaceLimit > 0 ? spaceLimit * spaces * s.fontSize : 0;
+      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + spacingPx;
+      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - spacingPx;
       if (estimate > longest) {
         // Beyond the overflow threshold, a longer line can only overflow further.
         if (end - start > 1) break;
@@ -356,8 +365,7 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
         // Cannot reach the 0.50 fill floor that the search requires.
         continue;
       }
-      const spaces = separator ? end - start - 1 : 0;
-      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, 0);
+      const line = buildLine(start, end, candidate, measure(candidate), advances, total, s, true, spaces, spaceLimit);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       const cost = lineCost(line, final, start === 0 && final, s);

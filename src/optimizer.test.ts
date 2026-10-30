@@ -174,3 +174,39 @@ test('edge firmness spends tracking to even the edge, and zero changes nothing',
   assert.ok(after.maxTracking <= 0.08 + 1e-9);
   assert.equal(after.overflow, false);
 });
+
+test('word spacing at zero changes nothing', () => {
+  assert.deepEqual(compose(texts, measure, { ...settings, wordSpacing: 0 }), compose(texts, measure, settings));
+});
+
+test('word spacing evens the edge on its own, within its bounds', () => {
+  // Tracking off so only word spacing can move the edge.
+  const flat = { ...settings, trackingMin: 0, trackingMax: 0, rag: 0, firmness: 1 };
+  const before = metrics(compose(texts, measure, flat).paragraphs, flat);
+  const spaced = { ...flat, wordSpacing: 0.5 };
+  const result = compose(texts, measure, spaced);
+  const after = metrics(result.paragraphs, spaced);
+  assert.ok(after.deviation < before.deviation, `${after.deviation} vs ${before.deviation}`);
+  assert.ok(result.paragraphs.some(p => p.lines.some(l => l.wordSpacing !== 0)));
+  // The test measure gives a space 4 px at 16 px type: 0.25 em, so 50 % is 0.125 em.
+  const limit = 0.5 * 4 / settings.fontSize;
+  for (const line of result.paragraphs.flatMap(p => p.lines)) {
+    assert.ok(Math.abs(line.wordSpacing) <= limit + 1e-12, `${line.wordSpacing}`);
+    assert.equal(line.tracking, 0);
+  }
+  assert.equal(after.overflow, false);
+});
+
+test('word spacing never applies to Japanese, which has no word spaces', () => {
+  const japanese = samples.japanese.split('\n\n');
+  const result = compose(japanese, measure, { ...settings, wordSpacing: 0.5, firmness: 1 });
+  for (const line of result.paragraphs.flatMap(p => p.lines)) assert.equal(line.wordSpacing, 0);
+});
+
+test('word spacing works on Arabic while its tracking stays locked at zero', () => {
+  const arabic = samples.arabic.split('\n\n');
+  const s = { ...settings, wordSpacing: 0.5, firmness: 1, rag: 0 };
+  const lines = compose(arabic, measure, s).paragraphs.flatMap(p => p.lines);
+  assert.ok(lines.some(line => line.wordSpacing !== 0));
+  for (const line of lines) assert.equal(line.tracking, 0);
+});
