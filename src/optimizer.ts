@@ -639,7 +639,12 @@ class TopK {
 }
 
 export function compose(texts: string[], measure: Measure, s: Settings, measureAt?: MeasureAt): Composition {
-  const options = texts.map(text => paragraphCandidates(text, measure, s, 32, measureAt));
+  return composeCandidates(texts.map(text => paragraphCandidates(text, measure, s, 32, measureAt)), s);
+}
+
+/** The joint stage alone: choose one retained layout per paragraph. Paragraph
+ *  candidates are independent, so they may come from several workers. */
+export function composeCandidates(options: { layouts: Layout[]; explored: number }[], s: Settings): Composition {
   let explored = options.reduce((sum, option) => sum + option.explored, 0);
   let candidates = 0;
   for (const option of options) candidates += option.layouts.length;
@@ -662,7 +667,7 @@ export function compose(texts: string[], measure: Measure, s: Settings, measureA
     }
   }
 
-  const factor = s.sync * 65 / Math.max(1, texts.length - 1);
+  const factor = s.sync * 65 / Math.max(1, options.length - 1);
   const zero = new Float64Array(FEATURE_COUNT - 1);
   let frontier: DocState[] = [{
     parent: null, layout: { lines: [], cost: 0 }, cost: 0,
@@ -671,7 +676,7 @@ export function compose(texts: string[], measure: Measure, s: Settings, measureA
   for (let i = 0; i < options.length; i++) {
     const layouts = options[i].layouts;
     const offset = offsets[i];
-    const limit = texts.length <= 3 && i < texts.length - 1 ? 1200 : 128;
+    const limit = options.length <= 3 && i < options.length - 1 ? 1200 : 128;
     const top = new TopK(limit);
     let order = 0;
     for (let f = 0; f < frontier.length; f++) {

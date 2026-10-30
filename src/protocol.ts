@@ -1,6 +1,7 @@
 import type { Composition, Settings } from './optimizer';
 import type { DirectionPolicy } from './language';
 import type { FontBinary } from './fonts';
+import type { PackedCandidates } from './pack';
 export { families } from './fonts';
 export type { Typeface } from './fonts';
 import type { Typeface } from './fonts';
@@ -32,5 +33,19 @@ export interface ComposeResponse {
   fontMs: number;
   measureMs: number;
   searchMs: number;
+  error?: string;
+}
+
+/** Composer → paragraph helper. */
+export type HelperRequest =
+  | { kind: 'fonts'; fonts: FontBinary[] }
+  | { kind: 'work'; id: number; paragraphs: { index: number; text: string }[];
+      settings: Settings; typeface: Typeface; direction: DirectionPolicy };
+/** Paragraph helper → composer. */
+export interface HelperResponse {
+  id: number;
+  results: { index: number; packed: PackedCandidates }[];
+  measurements: number;
+  measureMs: number;
   error?: string;
 }

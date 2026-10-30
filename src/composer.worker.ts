@@ -1,59 +1,101 @@
-import { compose, paragraphCandidates } from './optimizer';
-import { fontBinaries, installWidthSteps, loadFonts, widthSteps } from './fonts';
+import { composeCandidates, paragraphCandidates } from './optimizer';
+import type { Layout } from './optimizer';
+import { fontBinaries, loadFonts } from './fonts';
 import { createMeasure } from './measure';
-import type { ComposeRequest, WarmRequest, WorkerResponse } from './protocol';
-import type { FontBinary } from './fonts';
+import { createFontInstaller } from './font-install';
+import { unpackCandidates } from './pack';
+import { warmUpSearch } from './warmup';
+import type { ComposeRequest, HelperRequest, HelperResponse, WarmRequest, WorkerResponse } from './protocol';
 
 const scope = globalThis as unknown as { fonts: FontFaceSet; postMessage: (message: WorkerResponse) => void };
+const fonts = createFontInstaller(scope.fonts);
 
 /**
- * Exercise the search once with throwaway input so the first real composition
- * runs optimized code. Measured on a 40-paragraph document: the same search took
- * 115 ms in a fresh worker and 38 ms afterwards, i.e. a 3x interpreter penalty
- * paid exactly once, on the composition the reader is waiting for. Costs a few
- * milliseconds here, off the main thread, while the page is still painting.
+ * Paragraph search is independent per paragraph, so long documents are split
+ * across helper workers; only the joint stage runs here. Short documents are
+ * not worth the messaging. Any helper failure falls back to searching here.
  */
-function warmUpSearch() {
-  const settings = { width: 390, fontSize: 19, trackingMin: -0.012, trackingMax: 0.012,
-    rag: 0.055, minEnding: 0.32, sync: 0.65, protectEndings: true };
-  const sample = 'Warm the composing engine with a paragraph of ordinary length so that '
-    + 'its search and measurement paths are compiled before real work arrives. ';
-  const text = sample.repeat(3).trim();
-  const stub = (value: string) => value.length * 8.4;
-  paragraphCandidates(text, stub, settings);
-  compose([text, text, text], stub, settings);
+const PARALLEL_CHARACTERS = 3000;
+const helperCount = Math.min(4, Math.max(0, (navigator.hardwareConcurrency ?? 2) - 1));
+interface Helper { worker: Worker; sent: Set<string>; waiting: Map<number, (response: HelperResponse) => void> }
+let helpers: Helper[] | undefined;
+let helpersDead = helperCount < 2;
+
+function spawnHelpers(): Helper[] | undefined {
+  if (helpersDead) return undefined;
+  if (helpers) return helpers;
+  try {
+    helpers = Array.from({ length: helperCount }, () => {
+      const helper: Helper = {
+        worker: new Worker(new URL('./paragraph.worker.ts', import.meta.url), { type: 'module' }),
+        sent: new Set(), waiting: new Map(),
+      };
+      helper.worker.onmessage = (event: MessageEvent<HelperResponse>) => {
+        helper.waiting.get(event.data.id)?.(event.data);
+        helper.waiting.delete(event.data.id);
+      };
+      helper.worker.onerror = () => retireHelpers();
+      return helper;
+    });
+  } catch {
+    retireHelpers();
+  }
+  return helpers;
+}
+function retireHelpers() {
+  helpersDead = true;
+  for (const helper of helpers ?? []) {
+    helper.worker.terminate();
+    // Unblock anything waiting; the caller falls back to a local search.
+    for (const resolve of helper.waiting.values()) resolve({ id: -1, results: [], measurements: 0, measureMs: 0, error: 'retired' });
+  }
+  helpers = undefined;
+}
+/** Send each helper the font binaries it does not have yet. */
+function shareFonts(helper: Helper) {
+  const missing = [...fonts.received, ...fontBinaries()].filter(font => {
+    const key = `${font.family}:${font.weight}:${font.range}`;
+    if (helper.sent.has(key)) return false;
+    helper.sent.add(key);
+    return true;
+  });
+  if (missing.length) helper.worker.postMessage({ kind: 'fonts', fonts: missing } satisfies HelperRequest);
+}
+/** Longest paragraphs first into the least-loaded share: deterministic, so a
+ *  paragraph stays with the helper whose cache already holds its widths. */
+function split(texts: string[], parts: number): number[][] {
+  const shares = Array.from({ length: parts }, () => ({ load: 0, indices: [] as number[] }));
+  const order = texts.map((_, i) => i).sort((a, b) => texts[b].length - texts[a].length || a - b);
+  for (const i of order) {
+    const lightest = shares.reduce((best, share) => share.load < best.load ? share : best);
+    lightest.indices.push(i);
+    lightest.load += texts[i].length + 1;
+  }
+  return shares.map(share => share.indices);
 }
 
-/**
- * Install font faces from binaries the page already downloaded, so a cold
- * composition does not fetch or decode the same subsets twice. Returns whether
- * the set was usable; a failure falls back to fetching in the worker.
- */
-const installedFonts = new Map<string, Promise<FontFace>>();
-/** Binaries received from the page, kept to build width-step faces later. */
-const receivedFonts: FontBinary[] = [];
-const installedSteps = new Map<string, Promise<FontFace>>();
-async function installFonts(fonts: FontBinary[] | undefined): Promise<boolean> {
-  try {
-    for (const font of fonts ?? []) {
-      const key = `${font.family}:${font.weight}:${font.range}`;
-      if (installedFonts.has(key)) continue;
-      receivedFonts.push(font);
-      const face = new FontFace(font.family, font.data, { weight: font.weight, unicodeRange: font.range,
-        ...(font.stretch ? { stretch: font.stretch } : {}) });
-      scope.fonts.add(face);
-      installedFonts.set(key, face.load().catch(error => {
-        installedFonts.delete(key);
-        throw error;
-      }));
-    }
-    // Warm-up and a compose can overlap while a FontFace loads. Both await the
-    // same job; warm resize requests neither clone nor decode these fonts again.
-    await Promise.all(installedFonts.values());
-    return installedFonts.size > 0;
-  } catch {
-    return false;
+let helperRequest = 0;
+async function searchInParallel(request: ComposeRequest, pool: Helper[]) {
+  const id = ++helperRequest;
+  const shares = split(request.paragraphs, pool.length);
+  const responses = await Promise.all(pool.map((helper, h) => new Promise<HelperResponse>(resolve => {
+    shareFonts(helper);
+    helper.waiting.set(id, resolve);
+    helper.worker.postMessage({ kind: 'work', id, settings: request.settings, typeface: request.typeface,
+      direction: request.direction,
+      paragraphs: shares[h].map(index => ({ index, text: request.paragraphs[index] })) } satisfies HelperRequest);
+  })));
+  if (responses.some(response => response.error)) return undefined;
+  const options: { layouts: Layout[]; explored: number }[] = new Array(request.paragraphs.length);
+  for (const response of responses) for (const { index, packed } of response.results) {
+    options[index] = unpackCandidates(packed, request.paragraphs[index]);
   }
+  return {
+    options,
+    measurements: responses.reduce((n, r) => n + r.measurements, 0),
+    // Helpers measure concurrently: the slowest share is what the reader waits for.
+    measureMs: Math.max(...responses.map(r => r.measureMs)),
+  };
 }
 
 let fontKey = '';
@@ -69,8 +111,10 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
     // page waited for this message before composing at all.
     try {
       scope.postMessage({ kind: 'warm-start' });
-      await installFonts(request.fonts);
+      await fonts.install(request.fonts);
       scope.postMessage({ kind: 'warm-fonts' });
+      // Start helpers now, while the page paints; each warms its own search.
+      for (const helper of spawnHelpers() ?? []) shareFonts(helper);
       warmUpSearch();
       scope.postMessage({ kind: 'warm-jit' });
     } catch (error) {
@@ -81,7 +125,7 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
   }
   const start = performance.now();
   try {
-    if (!await installFonts(request.fonts)) {
+    if (!await fonts.install(request.fonts)) {
       // The page could not hand over its fonts. Fetching them here is the slow
       // path and can hang in some worker implementations, so bound it and let the
       // page compose on the main thread instead of waiting forever.
@@ -91,8 +135,7 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
       ]);
       if (!loaded) throw new Error('worker could not prepare its fonts');
     }
-    const steps = widthSteps(request.settings.widthFlex ?? 0);
-    if (steps.length) await installWidthSteps([...receivedFonts, ...fontBinaries()], steps, scope.fonts, installedSteps);
+    await fonts.installSteps(request.settings.widthFlex ?? 0);
     const fontMs = performance.now() - start;
     const key = `${request.typeface}:${request.settings.fontSize}:${request.direction}`;
     if (key !== fontKey) {
@@ -102,12 +145,16 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
     const countBefore = cached.calls;
     const timeBefore = cached.duration;
     const searchStart = performance.now();
-    const result = compose(request.paragraphs, cached.measure, request.settings, cached.measureAt);
+    const pool = request.paragraphs.join('').length >= PARALLEL_CHARACTERS ? spawnHelpers() : undefined;
+    const parallel = pool ? await searchInParallel(request, pool) : undefined;
+    const options = parallel?.options ?? request.paragraphs.map(text =>
+      paragraphCandidates(text, cached.measure, request.settings, 32, cached.measureAt));
+    const result = composeCandidates(options, request.settings);
     const compositionMs = performance.now() - searchStart;
-    const measureMs = cached.duration - timeBefore;
+    const measureMs = parallel ? parallel.measureMs : cached.duration - timeBefore;
     cached.trim();
     scope.postMessage({ id: request.id, result, elapsed: performance.now() - start,
-      measurements: cached.calls - countBefore, fontMs,
+      measurements: parallel ? parallel.measurements : cached.calls - countBefore, fontMs,
       measureMs, searchMs: Math.max(0, compositionMs - measureMs) });
   } catch (error) {
     scope.postMessage({ id: request.id, elapsed: performance.now() - start, measurements: 0,
