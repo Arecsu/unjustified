@@ -425,7 +425,7 @@ const controls: Record<string, { key: keyof Settings; factor: number; unit: stri
   'font-size': { key: 'fontSize', factor: 1, unit: ' px' }, 'letter-spacing': { key: 'letterSpacing', factor: 1, unit: ' em' }, measure: { key: 'width', factor: 1, unit: ' px' },
   'tracking-min': { key: 'trackingMin', factor: 1, unit: ' em' }, 'tracking-max': { key: 'trackingMax', factor: 1, unit: ' em' },
   rag: { key: 'rag', factor: .01, unit: '%' },
-  'word-spacing-min': { key: 'wordSpacingMin', factor: .01, unit: '%' }, 'word-spacing-max': { key: 'wordSpacingMax', factor: .01, unit: '%' },
+  'word-spacing-min': { key: 'wordSpacingMin', factor: -.01, unit: '%' }, 'word-spacing-max': { key: 'wordSpacingMax', factor: .01, unit: '%' },
   kashida: { key: 'kashida', factor: 1, unit: '' },
   'width-flex': { key: 'widthFlex', factor: .01, unit: '%' },
   firmness: { key: 'firmness', factor: .01, unit: '%' }, sync: { key: 'sync', factor: .01, unit: '%' }, ending: { key: 'minEnding', factor: .01, unit: '%' },
@@ -441,14 +441,13 @@ function updateTrackingRange() {
     $(`#${id}`).style.setProperty('--tracking-end', `${(max - low) / (high - low) * 100}%`);
   };
   shade('tracking-sliders', -0.08, 0.08, settings.trackingMin, settings.trackingMax);
-  shade('word-spacing-sliders', -0.5, 2, settings.wordSpacingMin ?? 0, settings.wordSpacingMax ?? 0);
 }
 for (const [id, control] of Object.entries(controls)) {
   $<HTMLInputElement>(`#${id}`).addEventListener('input', event => {
     const n = Number((event.target as HTMLInputElement).value);
     Object.assign(settings, { [control.key]: n * control.factor });
     $(`#${id}-value`).textContent = formatControl(id, n, control.unit);
-    if (id.startsWith('tracking-') || id.startsWith('word-spacing-')) updateTrackingRange();
+    if (id.startsWith('tracking-')) updateTrackingRange();
     if (id === 'sync') updateHarmonyNote();
     // Tracking, rag, firmness, harmony and ending weights re-rank the same text;
     // type size and base letter-spacing change the paragraph geometry.

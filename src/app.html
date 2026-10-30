@@ -39,16 +39,9 @@
               <p id="tracking-note" class="control-note">Two independent limits, not a forced adjustment.</p>
             </fieldset>
             {{range:rag}}
-            <fieldset class="tracking-control"><legend>Word spacing range</legend>
-              <div class="tracking-values"><output id="word-spacing-min-value" for="word-spacing-min">−0%</output><output id="word-spacing-max-value" for="word-spacing-max">+0%</output></div>
-              <div id="word-spacing-sliders" class="tracking-sliders" style="--zero:20%;--tracking-start:20%;--tracking-end:20%">
-                <input type="range" id="word-spacing-min" min="-50" max="0" step="5" value="0" aria-label="How far a space may shrink" />
-                <input type="range" id="word-spacing-max" min="0" max="200" step="5" value="0" aria-label="How far a space may stretch" />
-                <span class="tracking-zero" aria-hidden="true"></span>
-              </div>
-              <div class="range-ends"><span>Shrink</span><span>Stretch</span></div>
-              <p id="word-spacing-note" class="control-note">How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.</p>
-            </fieldset>
+            {{range:word-spacing-min}}
+            {{range:word-spacing-max}}
+            <p id="word-spacing-note" class="control-note">How far each space may shrink or stretch. The loosest way to even the edge; firmness decides how eagerly it is used.</p>
             {{range:kashida}}
             <p id="kashida-note" class="control-note">Arabic only: lengthens joins with tatweel (ـ), following the traditional priority. Copying returns the text without them.</p>
             {{range:width-flex}}

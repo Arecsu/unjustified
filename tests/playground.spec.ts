@@ -298,7 +298,7 @@ test('word spacing flex evens Arabic lines with tracking locked at zero', async 
   await setRange(page, 'rag', 0);
   await setRange(page, 'firmness', 100);
   const ragged = Math.min(...await bodyFills());
-  await setRange(page, 'word-spacing-min', -50);
+  await setRange(page, 'word-spacing-min', 50);
   await setRange(page, 'word-spacing-max', 50);
   await expect(page.locator('#word-spacing-max-value')).toHaveText('+50%');
   // Arabic lines have few spaces, so 50 % flex narrows the rag rather than

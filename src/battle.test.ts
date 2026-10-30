@@ -113,6 +113,7 @@ const grid: Settings[] = [
   { ...base, rag: 0 }, { ...base, rag: 0.18 },
   { ...base, firmness: 1 }, { ...base, firmness: 1, rag: 0, trackingMin: -0.08, trackingMax: 0.08 },
   { ...base, wordSpacingMin: -0.5, wordSpacingMax: 0.5 }, { ...base, kashida: 4 }, { ...base, widthFlex: 0.4 },
+  { ...base, rag: 0, firmness: 1, wordSpacingMin: -0.5, wordSpacingMax: 10 },
   { ...base, sync: 0 }, { ...base, sync: 1 },
   { ...base, protectEndings: false }, { ...base, minEnding: 0.6 }, { ...base, minEnding: 0.15 },
   // The nearly-justified preset, and everything at once.
