@@ -73,17 +73,20 @@ a { color: inherit; text-decoration: none; }
 @media (pointer: coarse) { .hl:active { background: var(--fg); color: var(--bg); } }
 .hl[aria-pressed='true'], .hl[aria-selected='true'] { background: var(--fg); color: var(--bg); }
 
-/* Header looks (HD in proto.js). Stops and idle: specimen S-11, the chosen word in
+/* Specimen S-11, word stops, wherever a few words pick one: the header's stops and
+   idle looks (HD in proto.js), the indent's ch / %, the underline buttons (struck
+   through as T-04 when off), the drawn stops and the variants. The chosen word in
    ink and underlined, the others at half ink, the slashes fainter still. */
-:is([data-hd='stops'], [data-hd='idle']) .modes .hl {
+:is([data-hd='stops'], [data-hd='idle']) .modes .hl, .unit button, [data-chip='underline'] .opt.sk .base, .ws .w, .row.pick .ch .hl {
   color: color-mix(in srgb, var(--fg) 52%, transparent);
   background: none;
   text-decoration: underline transparent var(--ul-w, .1em);
-  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto;
+  text-underline-offset: var(--ul, 3px);
+  text-decoration-skip-ink: auto;
   transition: color .12s, text-decoration-color .12s;
 }
-:is([data-hd='stops'], [data-hd='idle']) .modes .hl[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
-:is([data-hd='stops'], [data-hd='idle']) .modes .seg > .muted:not(:first-child) { color: color-mix(in srgb, var(--fg) 20%, transparent); }
+:is([data-hd='stops'], [data-hd='idle']) .modes .hl[aria-pressed='true'], .unit button[aria-pressed='true'], [data-chip='underline'] .opt.sk[aria-pressed='true'] .base, .ws .w:is([aria-pressed='true'], .on), .row.pick .ch .hl[aria-pressed='true'] { background: none; color: var(--fg); text-decoration-color: var(--fg); }
+:is([data-hd='stops'], [data-hd='idle']) .modes .seg > .muted:not(:first-child), .unit .sl, .ws .sl, .row.pick .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
 @media (hover: hover) and (pointer: fine) {
   :is([data-hd='stops'], [data-hd='idle']) .modes .hl:hover { background: none; color: var(--fg); }
 }
@@ -127,8 +130,21 @@ main { overflow-y: auto; min-width: 0; }
   white-space: nowrap;
   overflow: hidden;
 }
-.status span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.status > span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .status .sep { margin-inline: .65rem; }
+/* Numbers change in place, each in a tabular slot wide enough for it, so the
+   words beside them hold still. */
+.status .v { display: inline-block; text-align: end; font-feature-settings: 'tnum'; }
+[data-st='chars'] { min-width: 2ch; }
+[data-st='trip'] { min-width: 2ch; }
+/* One row, centred: the tatweels' slot clips its overflow, which would set its
+   baseline at its bottom edge and lift the words around it. */
+[data-status='setup'] { display: flex; align-items: center; }
+/* The tatweels slide open and shut, as the panel's folds do, sideways. */
+.st-fold { display: grid; grid-template-columns: 0fr; opacity: 0; transition: grid-template-columns .3s cubic-bezier(.2, .8, .2, 1), opacity .2s; }
+.st-fold.on { grid-template-columns: 1fr; opacity: 1; }
+.st-in { min-width: 0; overflow: hidden; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .st-fold { transition: none; } }
 .readings { display: none; }
 .exit { display: none; }
 
@@ -193,6 +209,7 @@ main { overflow-y: auto; min-width: 0; }
 .row .lbl { display: flex; gap: var(--og, .55rem); align-items: baseline; min-width: 0; white-space: nowrap; }
 .row .out { display: flex; gap: .5rem; align-items: baseline; }
 .row.toggle { align-items: center; cursor: pointer; }
+.row > * { transition: opacity .2s; }
 .row.dim > * { opacity: .4; }
 /* Split, the number moves to the two rows below; the option stays to relink. */
 .row.split > .out > output, .row.split > input { display: none; }
@@ -228,25 +245,13 @@ main { overflow-y: auto; min-width: 0; }
 @media (prefers-reduced-motion: reduce) { .sk { transition: none; } }
 
 /* The buttons beside a label: auto and linked in four looks to try, picked at the
-   panel's foot; the indent's ch / % below. Each reaches past its word, for fingers. */
+   panel's foot; the indent's ch / % below. Each reaches past its word, for fingers,
+   but down only half way to the slider, which keeps its double-click to reset. */
 .lbl button, .out button { position: relative; line-height: 1.3; }
-.lbl button::after, .out button::after { content: ''; position: absolute; inset: -.6rem -.15rem; }
+.lbl button::after, .out button::after { content: ''; position: absolute; inset: -.6rem -.15rem calc(var(--lt, .4rem) / -2); }
 .sk .over { padding: inherit; }
-/* The unit, ch / %, is specimen S-11's word stops in every look: the chosen word
-   in ink and underlined, the other at half ink, the slash fainter still. */
+/* The unit, ch / %, is specimen S-11's word stops in every look. */
 .unit { display: inline-flex; align-items: baseline; white-space: pre; font-weight: 450; }
-.unit button {
-  color: color-mix(in srgb, var(--fg) 52%, transparent);
-  text-decoration: underline transparent var(--ul-w, .1em);
-  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto;
-  transition: color .12s, text-decoration-color .12s;
-}
-.unit button[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
-.unit .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
-/* Underline: specimen S-11, as ch / % — on in ink and underlined; off at half ink,
-   struck through as T-04. */
-[data-chip='underline'] .opt.sk .base { color: color-mix(in srgb, var(--fg) 52%, transparent); text-decoration: underline transparent var(--ul-w, .1em); text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto; transition: color .12s, text-decoration-color .12s; }
-[data-chip='underline'] .opt.sk[aria-pressed='true'] .base { color: var(--fg); text-decoration-color: var(--fg); }
 
 /* Where a slider's option sits (OPTS in proto.js). Written in each place; one shows. */
 .at-label, .at-value, .at-below { display: none; }
@@ -325,6 +330,8 @@ main { overflow-y: auto; min-width: 0; }
 :is([data-mk='none'], [data-mk='quiet']) .dd-a { width: 0; margin-inline-start: -.6rem; }
 [data-mk='none'] .more { text-decoration: underline var(--ul-w, .1em); text-underline-offset: var(--ul, 3px); text-decoration-skip-ink: auto; }
 .gnote { margin: .35rem 0 0; font-size: .8125rem; color: var(--fg-2); text-wrap: pretty; }
+/* A control's note, under it: the row's own room above, as much again below. */
+.gnote.of-row { margin: 0; padding-bottom: calc(var(--rg, 1rem) / 2); }
 .gnote button { color: var(--fg); }
 /* The prototype's pickers, one a line: the name, then its choices, which wrap
    under each other, not under the name. "reset all" closes the panel. */
@@ -377,23 +384,35 @@ main { overflow-y: auto; min-width: 0; }
 /* Variants, the prototype's own group: each look's name over its choices. */
 .row.pick { display: block; }
 .row.pick .ch { display: flex; flex-wrap: wrap; gap: .15rem .5rem; align-items: baseline; margin-top: .35rem; }
-/* Its choices are specimen S-11's word stops: the chosen one in ink and underlined,
-   the rest at half ink, the slashes fainter still. No black block. */
-.row.pick .ch .hl {
-  padding: 0;
-  margin: 0;
-  background: none;
-  color: color-mix(in srgb, var(--fg) 52%, transparent);
-  text-decoration: underline transparent var(--ul-w, .1em);
-  text-underline-offset: var(--ul, 3px);
-  text-decoration-skip-ink: auto;
-  transition: color .12s, text-decoration-color .12s;
-}
-.row.pick .ch .hl[aria-pressed='true'] { background: none; color: var(--fg); text-decoration-color: var(--fg); }
+/* Its choices are specimen S-11's word stops. No black block. */
+.row.pick .ch .hl { padding: 0; margin: 0; }
+/* Each control's kind: its name, then its choices and the reset mark on one line,
+   beside the name when there's room, under it when not. */
+.row.pick.per { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .35rem .75rem; padding-block: .3rem; }
+.row.pick.per .ch { flex-wrap: nowrap; margin-top: 0; }
+.row.pick .ch .hl.rs-t { margin-inline-start: .6rem; }
 @media (hover: hover) and (pointer: fine) { .row.pick .ch .hl:hover { background: none; color: var(--fg); } }
 @media (pointer: coarse) { .row.pick .ch .hl:active { background: none; color: var(--fg); } }
-.row.pick .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
 [data-ul-at] { margin-block: .5rem; }
+
+/* The timings window: the whole trip large, then label and value pairs. */
+.trip-total { display: flex; flex-direction: column; gap: .2rem; margin: 0 0 .75rem; padding-top: calc(var(--rg, 1rem) / 2); }
+.trip-total strong { font-size: 2rem; font-weight: 400; letter-spacing: -.02em; line-height: 1; }
+.trip-total span { font-size: .8125rem; color: var(--fg-2); }
+.kv { margin: 0; padding-top: calc(var(--rg, 1rem) / 2); }
+.kv div { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; border-bottom: var(--hair); }
+.kv dt { color: var(--fg-2); }
+.kv dd { margin: 0; text-align: end; }
+.win .gnote { margin-top: .6rem; }
+.bench { margin: .9rem 0 0; }
+/* The trip in the status bar, which opens them: grey as the bar, full ink on
+   hover, pressed or while they're open, as the header's words. Fainter while a
+   composition is on its way, instead of saying so. */
+.status .trip { color: inherit; transition: color .12s, opacity .2s; }
+/* Only once it's taking a while: a quick one never dims it. */
+.status .trip.busy { opacity: .45; transition-delay: 0s, .15s; }
+.status .trip:active, .status .trip[aria-pressed='true'] { color: var(--fg); }
+@media (hover: hover) and (pointer: fine) { .status .trip:hover { color: var(--fg); } }
 
 /* Folds: a switched group's options while it's off, a group's extra ones until
    "more". Grid rows from 0fr to 1fr animate in every browser, unlike height: auto. */
@@ -483,6 +502,84 @@ input[type='range']::-moz-range-thumb { width: .5rem; height: 1rem; background: 
   .opt-row { min-height: 2.75rem; padding-top: 0; font-size: .875rem; }
   .opt-row .unit button { padding-block: .6rem; }
 }
+
+/* ---------------------------------------------------------------------------
+   Drawn sliders (KINDS in proto.js): the row is the slider, the range stays
+   hidden as the value's home. Drag sideways anywhere on the row.
+   --------------------------------------------------------------------------- */
+.row.range:not(.kind-slider) { cursor: ew-resize; touch-action: pan-y; }
+.row.range:not(.kind-slider) > input[type='range'] { display: none; }
+.row.range.split { cursor: auto; }
+.row.range:not(.kind-slider):focus-visible { outline-offset: 4px; }
+html.is-scrubbing, html.is-scrubbing * { cursor: ew-resize !important; }
+/* Value ink: grey until hovered or dragged, as S05; or grey at the default. */
+:is([data-vink='grey'], [data-vink='changed']) .row.range output { transition: color .15s; }
+[data-vink='grey'] .row.range output, [data-vink='changed'] .row.range:not(.changed) output { color: var(--fg-2); }
+[data-vink='grey'] .row.range:is(:hover, .is-drag, :focus-visible) output { color: var(--fg); }
+/* Value inline: right after the label, as S05; the reset keeps the row's end. */
+[data-rval='inline'] .row.range { grid-template-columns: auto minmax(0, 1fr); column-gap: var(--iv, .5rem); }
+[data-rval='inline'] .row.range .out .rs { margin-inline-start: auto; }
+/* Typing a value: in its place, ruled under. */
+.ed { width: 5ch; padding: 0; border: 0; border-bottom: var(--rule); border-radius: 0; background: none; text-align: end; outline: none; -webkit-user-select: text; user-select: text; }
+
+/* The reset, ↺, once the value has changed: on hover, or always (a finger has no
+   hover). Its slot stays at the default so the value never moves, unless collapsed. */
+.rs { position: relative; min-width: var(--rsw, 1em); margin-inline-start: calc(var(--rvg, .45rem) - .5rem); color: var(--fg-2); text-align: start; line-height: 1; }
+.lbl .rs { margin-inline-start: 0; }
+.rs::after { content: ''; position: absolute; inset: -.6rem -.3rem; }
+.row:not(.changed) .rs, [data-rshow='hover'] .row:not(:hover, :focus-visible) .rs { visibility: hidden; }
+[data-rslot='collapse'] .row:not(.changed) .rs { display: none; }
+@media (hover: hover) and (pointer: fine) { .rs:hover { color: var(--fg); } }
+@media (pointer: coarse) { [data-rshow='hover'] .row.changed .rs { visibility: visible; } }
+
+/* Line: a hairline under the row, filled to the value; a tick at the default. */
+.row .ln {
+  grid-column: 1 / -1;
+  position: relative;
+  height: var(--lnw, 2px);
+  margin-top: var(--ll, .45rem);
+  background:
+    linear-gradient(var(--fg), var(--fg)) 0 50% / calc(var(--p) * 100%) 100% no-repeat,
+    linear-gradient(var(--fg-3), var(--fg-3)) 0 50% / 100% 1px no-repeat;
+  transition: opacity .2s;
+}
+.row .ln .dn { position: absolute; left: calc(var(--d) * 100%); top: calc(50% - 3px); width: 1px; height: 6px; background: var(--fg-2); }
+.row.split .ln { visibility: hidden; }
+[data-line='hover'] .row .ln { opacity: 0; }
+[data-line='hover'] .row:is(:hover, .is-drag, :focus-visible) .ln { opacity: 1; }
+@media (pointer: coarse) { [data-line='hover'] .row .ln { opacity: 1; } }
+
+/* Box: specimen S02 in the dropdowns' box. The fill inverts what it covers. */
+.row.kind-box {
+  position: relative;
+  isolation: isolate;
+  background: var(--bg);
+  border: var(--rule);
+  padding: var(--ddp, .65em) .5em var(--ddp, .65em) .45em;
+  margin-block: max(.2rem, calc(var(--rg, 1rem) / 2 - var(--ddp, .65em) - 1px));
+}
+.row.kind-box .fill { position: absolute; inset: 0 auto 0 0; z-index: 1; width: calc(var(--p) * 100%); background: #fff; mix-blend-mode: difference; pointer-events: none; }
+.row.kind-box.has-d::before { content: ''; position: absolute; z-index: 1; left: calc(var(--d) * 100%); top: 0; width: 1px; height: .35rem; background: #fff; mix-blend-mode: difference; }
+.row.kind-box.split { border-color: transparent; }
+.row.kind-box.split .fill, .row.kind-box.split::before { display: none; }
+
+/* Stops: every value written out, the label beside, wrapping under it when long. */
+.row.range.kind-stops { grid-template-columns: max-content minmax(0, 1fr); }
+.row.kind-stops .out { justify-content: flex-end; }
+.row.range.kind-stops output { display: none; }
+.ws, .ws-i { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 .35em; }
+.ws-i { flex-wrap: nowrap; }
+.ws button.w { position: relative; }
+.ws button.w::after { content: ''; position: absolute; inset: -.5rem -.2rem; }
+/* A dropdown written out. */
+.rows .row.select.kind-stops { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .2rem .75rem; padding: calc(var(--rg, 1rem) / 2) 0; }
+
+/* Cells: specimen S12, a cell a step, a faint line under the default's. */
+.cells { display: inline-flex; gap: 2px; align-self: center; }
+.cells i { width: var(--cw, .55rem); height: .75em; border: var(--rule); }
+.cells i.on { background: var(--fg); }
+.cells i.df { box-shadow: inset 0 -3px 0 -2px var(--fg-2); }
+.cells i.df.on { box-shadow: none; }
 
 input[type='checkbox'] {
   appearance: none;
@@ -578,6 +675,11 @@ input[type='checkbox']:checked { background: var(--fg); }
 }
 [data-name][contenteditable='plaintext-only'] { min-width: 3ch; outline: none; cursor: text; caret-color: currentColor; }
 .col-head .m { text-transform: none; color: var(--fg-2); direction: ltr; unicode-bidi: isolate; }
+/* Its readings in tabular slots: a dash becoming 10 or 2.8% moves nothing. */
+.col-head [data-m] { display: inline-block; text-align: end; }
+.col-head [data-m$='.lines'] { min-width: 2ch; }
+.col-head [data-m$='.dev'] { min-width: 4.2ch; }
+.col-head [data-m$='.short'] { min-width: 1ch; }
 
 /* Under the head, three styles to try (Show › Ruler). Each but None marks the rag
    zone at the line's end: the same line turns dashed there, a drawing's mark for
@@ -624,14 +726,27 @@ input[type='checkbox']:checked { background: var(--fg); }
 .handle:hover, .handle.drag { opacity: 1; }
 [dir='rtl'] .handle { translate: -50% 0; }
 [data-compare] .col[data-col='b'] .handle { display: none; }
+/* Show › Width handle. Off: the width is set from the panel only. Hover: hidden
+   until the pointer is near it (.near, from proto.js) or it's in use; always
+   there for a finger, which has no hover. */
+[data-handle='off'] .handle { display: none !important; }
+@media (hover: hover) and (pointer: fine) {
+  [data-handle='hover'] .handle { opacity: 0; }
+  [data-handle='hover'] .frame.near .handle, [data-handle='hover'] .handle:focus-visible { opacity: .3; }
+  [data-handle='hover'] .handle:hover, [data-handle='hover'] .handle.drag { opacity: 1; }
+}
 .handle::before { content: ''; position: absolute; inset: 0 auto 0 50%; border-left: 1px dashed var(--fg); }
 .handle > span:first-child { position: relative; background: var(--bg); padding: .25rem 0; font-size: .8125rem; }
 @media (hover: hover) { .handle:hover::before, .handle.drag::before { border-left-style: solid; } }
 
-/* The composed text. The unjustified column stands in for the optimizer with
-   text-wrap: pretty. Always editable. */
+/* The text. The unjustified column is the app's composition; the browser's own
+   wrap is beside it when comparing, and hidden behind it always, where the
+   composer reads its width and its lines. Always editable. */
 .text {
   font: 400 var(--size)/var(--lh) var(--font);
+  /* The canvas measures the face as it comes: none of the panel's settings. */
+  font-feature-settings: normal;
+  font-variation-settings: normal;
   letter-spacing: var(--ls);
   width: var(--measure);
   hyphens: var(--hyphens);
@@ -645,8 +760,29 @@ input[type='checkbox']:checked { background: var(--fg); }
 .text p { position: relative; margin: 0 0 1.25em; text-indent: var(--indent); counter-increment: para; }
 .text p:last-child { margin-bottom: 0; }
 [data-indent='first'] .text p:not(:first-child), [data-indent='rest'] .text p:first-child { text-indent: 0; }
-.text[data-col='u'] { text-wrap: pretty; }
-.justify-u .text[data-col='u'], .justify-b .text[data-col='b'] { text-align: justify; }
+/* The browser's wrap, hidden behind the unjustified column, for the composer. */
+/* Until the first composition the canvas is hidden, then fades in whole: no
+   browser wrap first and a jump to the composed lines after, and no head and
+   ruler drawn at the fallback font's width, shrinking once the face arrives. */
+.stage { transition: opacity .35s; }
+:root:not([data-composed]) .stage { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .stage { transition: none; } }
+.text.ghost { position: absolute; inset-block-start: 0; inset-inline-start: 0; visibility: hidden; pointer-events: none; }
+.justify-b .text[data-col='b'] { text-align: justify; }
+/* The composition, as src/rendering.ts writes it: a box a line, set as composed,
+   the indent its first line's margin. The text stays selectable and copies as
+   written: hyphens are drawn, tatweels can't be selected. */
+.text .composed-paragraph { line-height: 0; text-indent: 0; }
+.composed-line { display: inline-block; width: 100%; vertical-align: top; position: relative; line-height: var(--lh); white-space: pre; text-indent: 0; }
+.line-text { position: relative; }
+.hyphen::after { content: '-'; }
+.kashida { -webkit-user-select: none; user-select: none; }
+.overflowing::after { content: '↗'; position: absolute; inset-inline-end: -1.25rem; top: 0; font: .8125rem InterVariable, sans-serif; }
+/* Moved words: the ones on another line than the browser put them. */
+.moved .moved-word { text-decoration: underline color-mix(in srgb, var(--fg) 45%, transparent) 1px; text-underline-offset: .25em; }
+/* Inspect lines: the line under the pointer, read out in the status bar. */
+.inspect .composed-line { cursor: crosshair; }
+.inspect .composed-line:hover, .inspect .composed-line.inspected { background: color-mix(in srgb, var(--fg) 6%, transparent); }
 /* Which native text vs browser shows. It sits left of vs browser, so the
    button you just pressed doesn't move when it appears. */
 :root:not([data-compare]) .seg.vs { display: none; }
@@ -656,7 +792,7 @@ input[type='checkbox']:checked { background: var(--fg); }
 /* The rag zone: where line ends are allowed to land. */
 .diag .text { box-shadow: inset calc(var(--measure-px) * var(--rag) / -100) 0 0 color-mix(in srgb, var(--fg) 7%, transparent); }
 .rtl.diag .text { box-shadow: inset calc(var(--measure-px) * var(--rag) / 100) 0 0 color-mix(in srgb, var(--fg) 7%, transparent); }
-.tw-marks .tw { background: color-mix(in srgb, var(--fg) 16%, transparent); }
+.tw-marks .kashida { background: color-mix(in srgb, var(--fg) 16%, transparent); }
 
 /* Paragraph numbers outside the text, on its starting side. Generated content,
    so it can't be typed into or copied. */
