@@ -4,7 +4,7 @@
  * stage. Each helper keeps its own measurement cache; paragraphs are assigned
  * by a deterministic split, so a resize finds its widths already measured.
  */
-import { paragraphCandidates } from './optimizer';
+import { paragraphCandidates, paragraphSettings } from './optimizer';
 import { createMeasure } from './measure';
 import { createFontInstaller } from './font-install';
 import { packCandidates, transferables } from './pack';
@@ -40,7 +40,7 @@ self.onmessage = async (event: MessageEvent<HelperRequest>) => {
     }
     const calls = cached.calls, duration = cached.duration;
     const results = request.paragraphs.map(({ index, text }) => ({
-      index, packed: packCandidates(paragraphCandidates(text, cached!.measure, request.settings, 32, cached!.measureAt)),
+      index, packed: packCandidates(paragraphCandidates(text, cached!.measure, paragraphSettings(request.settings, index), 32, cached!.measureAt)),
     }));
     cached.trim();
     scope.postMessage({ id: request.id, results, measurements: cached.calls - calls,

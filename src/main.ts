@@ -8,14 +8,14 @@ import { families, loadFonts, fontLanguages, fontBinaries, installWidthSteps, wi
 import { createMeasure } from './measure';
 import type { Typeface } from './fonts';
 import type { ComposeRequest, ComposeResponse, WorkerResponse } from './protocol';
-import { compose, metrics, wordsOf } from './optimizer';
+import { compose, justified, metrics, wordsOf } from './optimizer';
 import type { Composition, Layout, Settings } from './optimizer';
 import { detectLanguage, directionFor, normalizeText, hasArabic, hasJapanese, segmentText } from './language';
 import type { DirectionPolicy } from './language';
 import { readNativeLayout } from './native-layout';
 import { annotateParagraph, bindInspection, cssRem, kashidaHtml, renderOptimized, renderBaselineGuides } from './rendering';
 import { placeKashida } from './kashida';
-import { hyphenationLanguages, hyphenationPoints, loadHyphenator } from './hyphenation';
+import { hyphenationLanguages, hyphenationPoints, hyphenPenalty, loadHyphenator } from './hyphenation';
 import type { Hyphenation } from './language';
 import { renderVisualizers } from './visualizers';
 import { benchmark, publishTiming } from './benchmark';
@@ -91,8 +91,6 @@ function updateWidthUI() {
 /** Hyphenation controls: page-side, because break points are computed here. */
 const hyphenDefaults = { enabled: false, language: 'auto', minWord: 6, minBefore: 2, minAfter: 3, frequency: 50 };
 const hyphen = { ...hyphenDefaults };
-/** A hyphen is as bad as a line this far short: 20 % at 'Rare', 1 % at 'Frequent'. */
-const hyphenPenalty = (frequency: number) => 0.01 + 0.19 * (1 - frequency / 100) ** 2;
 const hyphenControls = { 'hyphen-frequency': 'frequency', 'hyphen-min-word': 'minWord', 'hyphen-before': 'minBefore', 'hyphen-after': 'minAfter' } as const;
 function hyphenLanguage(): string | undefined {
   if (hyphen.language !== 'auto') return hyphen.language;
@@ -580,11 +578,6 @@ function syncControls() {
   }
   updateTrackingRange();
 }
-/** A flush edge from the tools the text can use: kashida and word spacing for
- *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is.
- *  Harmony is off: with flush bodies it only matches last-line lengths, and
- *  pays for that with extra tracking. */
-const justified = { rag: 0, firmness: 1, wordSpacingMin: -0.25, wordSpacingMax: 1, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 } satisfies Partial<Settings>;
 let beforeJustified: Partial<Settings> | undefined;
 $('#justify').addEventListener('change', e => {
   if ((e.target as HTMLInputElement).checked) {

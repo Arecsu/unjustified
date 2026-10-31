@@ -27,6 +27,13 @@ const joinsBackward = (c: string) => LETTER.test(c) && c !== 'ء';
 
 export interface Site { offset: number; priority: number }
 
+/** Which words take tatweels, where, and how many. `sites`: the priorities
+ *  allowed, as a bit mask (bit 0 for priority 1 … bit 3 for 4); `minLetters`:
+ *  the shortest word, in letters; `perWord`: the most a word may stack. */
+export interface KashidaOptions { sites?: number; minLetters?: number; perWord?: number }
+export const ALL_SITES = 0b1111;
+const LETTERS = /[ؠ-يٮ-ۓۺ-ۼ]/gu;
+
 /** Every place a tatweel may go in `word`, best first. Offsets are UTF-16
  *  indices: the tatweel is inserted before `word[offset]`. */
 export function kashidaSites(word: string): Site[] {
@@ -59,34 +66,38 @@ export function kashidaSites(word: string): Site[] {
 
 const siteCache = new Map<string, Site | null>();
 /** The single site a word uses, or null. Cached: lines repeat words often. */
-export function bestSite(word: string): Site | null {
-  let site = siteCache.get(word);
+export function bestSite(word: string, options: KashidaOptions = {}): Site | null {
+  const mask = options.sites ?? ALL_SITES, min = options.minLetters ?? 0;
+  const key = mask === ALL_SITES && !min ? word : `${mask}:${min}:${word}`;
+  let site = siteCache.get(key);
   if (site === undefined) {
-    site = kashidaSites(word)[0] ?? null;
+    site = min && (word.match(LETTERS)?.length ?? 0) < min ? null
+      : kashidaSites(word).find(s => mask & (1 << (s.priority - 1))) ?? null;
     if (siteCache.size > 50000) siteCache.clear();
-    siteCache.set(word, site);
+    siteCache.set(key, site);
   }
   return site;
 }
 
 /**
  * Distribute `count` tatweels over a line's words: best priority first, then
- * from the end of the line, one per word before any stacking. Returns, per
- * word, how many tatweels it receives (0 for most words).
+ * from the end of the line, one per word before any stacking, and no word past
+ * `perWord`. Returns, per word, how many tatweels it receives (0 for most words).
  */
-export function placeKashida(words: string[], count: number): number[] {
+export function placeKashida(words: string[], count: number, options: KashidaOptions = {}): number[] {
   const result = new Array<number>(words.length).fill(0);
   if (count <= 0) return result;
   const order: number[] = [];
-  for (let i = 0; i < words.length; i++) if (bestSite(words[i])) order.push(i);
+  for (let i = 0; i < words.length; i++) if (bestSite(words[i], options)) order.push(i);
   if (!order.length) return result;
-  order.sort((a, b) => bestSite(words[a])!.priority - bestSite(words[b])!.priority || b - a);
-  for (let j = 0; j < count; j++) result[order[j % order.length]]++;
+  order.sort((a, b) => bestSite(words[a], options)!.priority - bestSite(words[b], options)!.priority || b - a);
+  const most = order.length * (options.perWord ?? Infinity);
+  for (let j = 0; j < count && j < most; j++) result[order[j % order.length]]++;
   return result;
 }
 
 /** Split `word` around its site for rendering: [before, after]. */
-export function splitAtSite(word: string): [string, string] {
-  const site = bestSite(word);
+export function splitAtSite(word: string, options: KashidaOptions = {}): [string, string] {
+  const site = bestSite(word, options);
   return site ? [word.slice(0, site.offset), word.slice(site.offset)] : [word, ''];
 }

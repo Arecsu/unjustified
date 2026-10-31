@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TATWEEL, kashidaSites, placeKashida, splitAtSite } from './kashida';
+import { TATWEEL, bestSite, kashidaSites, placeKashida, splitAtSite } from './kashida';
 
 const insert = (word: string, offset: number) => word.slice(0, offset) + TATWEEL + word.slice(offset);
 const best = (word: string) => insert(word, kashidaSites(word)[0].offset);
@@ -64,4 +64,16 @@ test('placement: best priority first, from the end of the line, then stacking', 
 
 test('splitAtSite keeps every character', () => {
   for (const word of ['مستشفى', 'مكتبة', 'دار', 'hello']) assert.equal(splitAtSite(word).join(''), word);
+});
+
+test('options: allowed sites, shortest word, most per word', () => {
+  // مستشفى has a priority-1 site; without priority 1 it falls to its next one.
+  assert.equal(bestSite('مستشفى', { sites: 0b1110 })?.priority, 4);
+  assert.equal(bestSite('مكتبة', { sites: 0b0001 }), null);
+  // جميل has four letters.
+  assert.equal(bestSite('جميل', { minLetters: 5 }), null);
+  assert.ok(bestSite('جميل', { minLetters: 4 }));
+  const words = ['جميل', 'مستشفى', 'دار', 'مكتبة'];
+  assert.deepEqual(placeKashida(words, 5, { perWord: 1 }), [1, 1, 0, 1]);
+  assert.deepEqual(placeKashida(words, 2, { sites: 0b0010 }), [0, 0, 0, 2]);
 });

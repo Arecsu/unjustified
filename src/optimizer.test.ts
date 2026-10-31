@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { compose, greedy, metrics, scoreDocument, shapeDistance, wordsOf } from './optimizer';
+import { compose, greedy, metrics, paragraphSettings, scoreDocument, shapeDistance, wordsOf } from './optimizer';
 import type { Settings } from './optimizer';
 import { trackingAdvances } from './text-metrics';
 import { segmentText, directionFor } from './language';
@@ -233,6 +233,41 @@ test('kashida evens Arabic lines with whole tatweels, only where a word can take
     assert.equal(line.tracking, 0);
   }
   assert.equal(after.overflow, false);
+});
+
+test('kashida keeps to its options: sites, words and how many each stacks', () => {
+  const arabic = samples.arabic.split('\n\n');
+  const options = { sites: 0b0011, minLetters: 4, perWord: 1 };
+  const s = { ...settings, rag: 0, firmness: 1, kashida: 4, kashidaOptions: options };
+  for (const line of compose(arabic, measure, s).paragraphs.flatMap(p => p.lines)) {
+    if (!line.kashida) continue;
+    const placed = placeKashida(wordsOf(line.text), line.kashida, options);
+    assert.equal(placed.reduce((a, b) => a + b, 0), line.kashida, 'every counted tatweel has a place');
+    assert.ok(placed.every(n => n <= 1));
+  }
+});
+
+test('kashida frequency trades tatweels for word spacing', () => {
+  const arabic = samples.arabic.split('\n\n');
+  const s = { ...settings, kashida: 4, wordSpacingMin: -0.2, wordSpacingMax: 2 };
+  const use = (f: number) => {
+    const lines = compose(arabic, measure, { ...s, kashidaFrequency: f }).paragraphs.flatMap(p => p.lines);
+    return { tatweels: lines.reduce((n, l) => n + l.kashida, 0), spaces: lines.reduce((n, l) => n + Math.max(0, l.wordSpacing), 0) };
+  };
+  const spaces = use(0), kashida = use(1);
+  assert.ok(kashida.tatweels > spaces.tatweels, `${kashida.tatweels} vs ${spaces.tatweels}`);
+  assert.ok(kashida.spaces < spaces.spaces, `${kashida.spaces} vs ${spaces.spaces}`);
+});
+
+test('an indent shortens the first line of the paragraphs it applies to', () => {
+  const s = { ...settings, indent: 60 };
+  const result = compose(texts, measure, s);
+  result.paragraphs.forEach(p => assert.ok(p.lines[0].width <= s.width - s.indent + 0.05, `${p.lines[0].width}`));
+  assert.equal(paragraphSettings({ ...s, indentParagraphs: 'first' }, 1).indent, 0);
+  assert.equal(paragraphSettings({ ...s, indentParagraphs: 'rest' }, 0).indent, 0);
+  assert.equal(paragraphSettings({ ...s, indentParagraphs: 'rest' }, 2).indent, 60);
+  const plain = compose(texts, measure, settings);
+  assert.ok(result.paragraphs.some((p, i) => p.lines[0].end < plain.paragraphs[i].lines[0].end));
 });
 
 test('kashida never touches Latin or Japanese text', () => {

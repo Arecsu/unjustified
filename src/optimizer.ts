@@ -21,6 +21,7 @@ import type { Hyphenation } from './language';
 import { fitMeasure, shareGap } from './stretch';
 import type { Tool } from './stretch';
 import { bestSite, TATWEEL } from './kashida';
+import type { KashidaOptions } from './kashida';
 
 export interface Settings {
   width: number;
@@ -48,11 +49,29 @@ export interface Settings {
   hyphenPenalty?: number;
   /** 0–4. Most tatweels a line of Arabic may receive. 0 disables kashida. */
   kashida?: number;
+  /** Which joins take tatweels and how many a word may stack. Default: every
+   *  join, any word, no limit per word. */
+  kashidaOptions?: KashidaOptions;
+  /** 0–1. Kashida over the other tools, word spacing first: 0.5 is the default
+   *  balance, 0 makes kashida 64 times stiffer (spaces first), 1 64 times looser
+   *  (kashida first, spaces once tatweels run out). */
+  kashidaFrequency?: number;
+  /** First-line indent in px: that line's measure is `width - indent`. Set per
+   *  paragraph by `paragraphSettings`. */
+  indent?: number;
+  /** Which paragraphs `indent` applies to. Default: all. */
+  indentParagraphs?: 'all' | 'first' | 'rest';
   /** 0–0.4. How far lines may condense along the font's width axis. Needs a
    *  `MeasureAt`; ignored without one. */
   widthFlex?: number;
   protectEndings: boolean;
 }
+
+/** A flush edge from the tools the text can use: kashida and word spacing for
+ *  Arabic, word spacing and tracking elsewhere. Width flex stays as it is.
+ *  Harmony is off: with flush bodies it only matches last-line lengths, and
+ *  pays for that with extra tracking. */
+export const justified = { rag: 0, firmness: 1, wordSpacingMin: -0.25, wordSpacingMax: 1, kashida: 4, trackingMin: -0.04, trackingMax: 0.04, sync: 0 } satisfies Partial<Settings>;
 
 export interface Line {
   start: number;
@@ -95,6 +114,9 @@ const fillTolerance = (s: Settings) => 0.10 * (1 - 0.8 * (s.firmness ?? 0));
 /** Two hyphenated lines in a row cost this many times the hyphen penalty extra. */
 const HYPHEN_STACK = 2;
 const hyphenCost = (s: Settings) => square((s.hyphenPenalty ?? 0) / fillTolerance(s));
+/** Kashida's stiffness on a line, scaled by its frequency. Line-to-line changes
+ *  keep the base stiffness, as the WebAssembly search does. */
+const kashidaStiffness = (s: Settings) => KASHIDA_STIFFNESS * 64 ** (1 - 2 * (s.kashidaFrequency ?? 0.5));
 /** How much shorter (fraction of the measure) a body may get for harmony. */
 const HARMONY_SLACK = 0.01;
 /** Weight of the pull toward the full edge for lines inside the rag zone. */
@@ -116,7 +138,7 @@ function lineCost(line: Line, final: boolean, only: boolean, settings: Settings)
   if (line.overflow) return 500 + square(line.fill - 1) * 100;
   const track = 0.10 * restraint(settings) * square(line.tracking / 0.01)
     + (line.wordSpacing !== 0 ? WORD_STIFFNESS * restraint(settings) * square(line.wordSpacing) : 0)
-    + (line.kashida !== 0 ? KASHIDA_STIFFNESS * restraint(settings) * square(line.kashidaWidth / settings.fontSize) : 0)
+    + (line.kashida !== 0 ? kashidaStiffness(settings) * restraint(settings) * square(line.kashidaWidth / settings.fontSize) : 0)
     + (line.stretch !== 100 ? WIDTH_STIFFNESS * restraint(settings) * square(100 - line.stretch) : 0)
     + (line.hyphen ? hyphenCost(settings) : 0);
   if (only) return track;
@@ -163,7 +185,7 @@ function buildLine(start: number, end: number, text: string, natural: number, ad
     // kashida, one percentage point of font-stretch for width (condense only).
     const words = tools[0], kash = tools[1], fit = tools[2], track = tools[3];
     kash.k = tatweel / s.width;
-    kash.b = KASHIDA_STIFFNESS * restraint(s) * square(tatweel / s.fontSize);
+    kash.b = kashidaStiffness(s) * restraint(s) * square(tatweel / s.fontSize);
     kash.min = 0; kash.max = kashidaLimit;
     words.k = spaces * s.fontSize / s.width;
     words.b = WORD_STIFFNESS * restraint(s);
@@ -249,6 +271,7 @@ export function greedy(text: string, measure: Measure, s: Settings): Layout {
   if (!total) return { lines: [], cost: 0 };
   const lines: Line[] = [];
   const separatorAdvances = separator ? advancesOf(separator) : 0;
+  const first = firstLine(s);
   /** The end of the word starting at `from`: greedy never breaks inside one. */
   const wordEnd = (from: number) => {
     let end = from + 1;
@@ -256,17 +279,18 @@ export function greedy(text: string, measure: Measure, s: Settings): Layout {
     return end;
   };
   for (let start = 0; start < total;) {
+    const ls = start === 0 ? first : s;
     let end = wordEnd(start);
     let candidate = words.slice(start, end).join('');
     let advances = advancesOf(candidate);
-    let line = buildLine(start, end, candidate, measure(candidate), advances, total, s, false,
+    let line = buildLine(start, end, candidate, measure(candidate), advances, total, ls, false,
       0, 0, 0, 0, 0, 0, undefined, false, candidate, true)!;
     while (end < total) {
       const next = wordEnd(end);
       const word = words.slice(end, next).join('');
       candidate = candidate + separator + word;
       advances += advancesOf(word) + separatorAdvances;
-      const built = buildLine(start, next, candidate, measure(candidate), advances, total, s, false);
+      const built = buildLine(start, next, candidate, measure(candidate), advances, total, ls, false);
       if (!built) break;
       line = built;
       end = next;
@@ -275,6 +299,16 @@ export function greedy(text: string, measure: Measure, s: Settings): Layout {
     start = line.end;
   }
   return { lines, cost: scoreParagraph(lines, s) };
+}
+
+/** A paragraph's first line: the measure less its indent. */
+const firstLine = (s: Settings): Settings => s.indent ? { ...s, width: Math.max(1, s.width - s.indent) } : s;
+
+/** The settings for paragraph `index`: its indent, or none where it doesn't apply. */
+export function paragraphSettings(s: Settings, index: number): Settings {
+  if (!s.indent) return s;
+  const on = s.indentParagraphs === 'first' ? index === 0 : s.indentParagraphs === 'rest' ? index > 0 : true;
+  return on ? s : { ...s, indent: 0 };
 }
 
 export function scoreParagraph(lines: Line[], s: Settings): number {
@@ -511,7 +545,7 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   // cannot survive the fill/overflow rules that follow: the band absorbs
   // kerning, ligatures and contextual (Arabic) shaping differences, so a
   // skipped candidate would have been discarded anyway.
-  const band = s.width * 0.10;
+  const first = firstLine(s);
   const unitWidths = new Float64Array(total);
   for (let i = 0; i < total; i++) unitWidths[i] = measure(words[i]);
   const spaceWidth = separator ? measure(separator) : 0;
@@ -520,11 +554,12 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   const spaceStretch = (s.wordSpacingMax ?? 0) * spaceWidth / s.fontSize;
   // Kashida: which words can take a tatweel, as a prefix count per line range.
   const kashidaLimit = s.kashida && hasArabic(text) ? s.kashida : 0;
+  const perWord = s.kashidaOptions?.perWord ?? Infinity;
   const tatweel = kashidaLimit ? measure(TATWEEL) : 0;
   // Width: whole condensing steps, only with a step-aware measure.
   const widthLimit = measureAt && s.widthFlex ? Math.round(s.widthFlex * 100) : 0;
   const sitePrefix = new Int32Array(total + 1);
-  if (kashidaLimit) for (let i = 0; i < total; i++) sitePrefix[i + 1] = sitePrefix[i] + (bestSite(words[i]) ? 1 : 0);
+  if (kashidaLimit) for (let i = 0; i < total; i++) sitePrefix[i + 1] = sitePrefix[i] + (bestSite(words[i], s.kashidaOptions) ? 1 : 0);
 
   // Stage 1: every line that can start where some line ends. Which lines exist
   // depends only on their start, never on the path that reached it, so this
@@ -535,6 +570,9 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
   reachable[0] = 1;
   for (let start = 0; start < total; start++) {
     if (!reachable[start]) continue;
+    // The first line is set in the measure its indent leaves.
+    const ls = start === 0 ? first : s;
+    const band = ls.width * 0.10;
     let candidate = '';
     let advances = 0;
     let estimate = 0;
@@ -564,10 +602,10 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
       const shrinkPx = spaceShrink > 0 ? spaceShrink * spaces * s.fontSize : 0;
       const stretchPx = spaceStretch > 0 ? spaceStretch * spaces * s.fontSize : 0;
       // Condensing by N % never narrows text by more than N % of its width.
-      const longest = s.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + shrinkPx
+      const longest = ls.width + band + (s.trackingMin < 0 ? -s.trackingMin * trackingPx : 0) + shrinkPx
         + (widthLimit ? estimate * widthLimit / 100 : 0);
-      const lineKashida = kashidaLimit && sitePrefix[end] > sitePrefix[start] ? kashidaLimit : 0;
-      const shortest = s.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - stretchPx
+      const lineKashida = kashidaLimit ? Math.min(kashidaLimit, (sitePrefix[end] - sitePrefix[start]) * perWord) : 0;
+      const shortest = ls.width * 0.5 - band - (s.trackingMax > 0 ? s.trackingMax * trackingPx : 0) - stretchPx
         - (lineKashida ? lineKashida * tatweel : 0);
       if (estimate > longest) {
         // Beyond the overflow threshold, a longer line can only overflow further.
@@ -579,12 +617,12 @@ export function paragraphCandidates(text: string, measure: Measure, s: Settings,
       const ink = hyphen ? candidate + '-' : candidate;
       const wholeWord = separator ? spaces === 0 && (start === 0 || joins[start - 1] !== '') && !hyphen : end - start === 1;
       const line = buildLine(start, end, candidate, hyphen ? measure(ink) : measure(candidate),
-        hyphen ? advances + 1 : advances, total, s, true, spaces, spaceShrink, spaceStretch,
+        hyphen ? advances + 1 : advances, total, ls, true, spaces, spaceShrink, spaceStretch,
         lineKashida, tatweel, widthLimit, measureAt, hyphen, ink, wholeWord);
       if (!line) break;
       if (!final && line.fill < 0.50 && !line.overflow) continue;
       table.push(line);
-      costs.push(lineCost(line, final, start === 0 && final, s));
+      costs.push(lineCost(line, final, start === 0 && final, ls));
       reachable[end] = 1;
     }
   }
@@ -795,7 +833,7 @@ export function asEvenAsBest(layouts: Layout[]): Layout[] {
 }
 
 export function compose(texts: string[], measure: Measure, s: Settings, measureAt?: MeasureAt): Composition {
-  return composeCandidates(texts.map(text => paragraphCandidates(text, measure, s, 32, measureAt)), s);
+  return composeCandidates(texts.map((text, i) => paragraphCandidates(text, measure, paragraphSettings(s, i), 32, measureAt)), s);
 }
 
 /** The joint stage alone: choose one retained layout per paragraph. Paragraph

@@ -42,6 +42,9 @@ export function loadHyphenator(language: string): Promise<Hyphenate> {
 
 export interface HyphenationOptions { minWord: number; minBefore: number; minAfter: number }
 
+/** A hyphen is as bad as a line this far short: 20 % at 'Rare', 1 % at 'Frequent'. */
+export const hyphenPenalty = (frequency: number) => 0.01 + 0.19 * (1 - frequency / 100) ** 2;
+
 /** Break points for every word of `paragraphs` that may be hyphenated. Arabic
  *  and Japanese are never hyphenated; leading/trailing punctuation never
  *  counts toward the letters kept on either side. */

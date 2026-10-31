@@ -1,4 +1,4 @@
-import { composeCandidates, paragraphCandidates } from './optimizer';
+import { composeCandidates, paragraphCandidates, paragraphSettings } from './optimizer';
 import type { Layout } from './optimizer';
 import { fontBinaries, loadFonts } from './fonts';
 import { createMeasure } from './measure';
@@ -154,8 +154,8 @@ self.onmessage = async (event: MessageEvent<ComposeRequest | WarmRequest>) => {
     const searchStart = performance.now();
     const pool = request.paragraphs.join('').length >= PARALLEL_CHARACTERS ? spawnHelpers() : undefined;
     const parallel = pool ? await searchInParallel(request, pool) : undefined;
-    const options = parallel?.options ?? request.paragraphs.map(text =>
-      paragraphCandidates(text, cached.measure, request.settings, 32, cached.measureAt));
+    const options = parallel?.options ?? request.paragraphs.map((text, i) =>
+      paragraphCandidates(text, cached.measure, paragraphSettings(request.settings, i), 32, cached.measureAt));
     const result = composeCandidates(options, request.settings);
     const compositionMs = performance.now() - searchStart;
     const measureMs = parallel ? parallel.measureMs : cached.duration - timeBefore;

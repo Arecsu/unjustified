@@ -2,6 +2,7 @@ import type { Layout } from './optimizer';
 import { detectLanguage, directionFor, segmentText, hasArabic } from './language';
 import type { DirectionPolicy, Hyphenation } from './language';
 import { placeKashida, splitAtSite, TATWEEL } from './kashida';
+import type { KashidaOptions } from './kashida';
 
 /**
  * Root font size is read once per render instead of once per line: calling
@@ -37,14 +38,18 @@ export interface RenderOptions {
   letterSpacing?: number;
   /** The hyphenation points the composition used, so words split identically. */
   hyphenation?: Hyphenation;
+  /** The kashida options the composition used, so tatweels land where it counted them. */
+  kashida?: KashidaOptions;
+  /** First-line indent per paragraph, in CSS pixels, as composed. */
+  indents?: number[];
 }
 
 /**
  * A word with its tatweels as a separate, unselectable span: the letters stay
  * joined across it (research/SPIKES.md) and native copy returns the original word.
  */
-export function kashidaHtml(word: string, count: number): string {
-  const [before, after] = splitAtSite(word);
+export function kashidaHtml(word: string, count: number, options?: KashidaOptions): string {
+  const [before, after] = splitAtSite(word, options);
   return `${escapeHtml(before)}<span class="kashida" aria-hidden="true">${TATWEEL.repeat(count)}</span>${escapeHtml(after)}`;
 }
 
@@ -80,13 +85,14 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
     const wordOf = new Int32Array(units.length);
     for (let i = 1; i < units.length; i++) wordOf[i] = wordOf[i - 1] + (joins[i - 1] || !separator ? 1 : 0);
     const lines: string[] = [];
+    const indent = options.indents?.[pIndex] ? cssRem(options.indents[pIndex]!, root) : '';
     layout.lines.forEach((line, lineIndex) => {
       let inner = '';
-      const tatweels = line.kashida ? placeKashida(units.slice(line.start, line.end), line.kashida) : undefined;
+      const tatweels = line.kashida ? placeKashida(units.slice(line.start, line.end), line.kashida, options.kashida) : undefined;
       for (let i = line.start; i < line.end; i++) {
         const unit = i === line.end - 1 ? units[i].trimEnd() : units[i];
         if (i > line.start) inner += escapeHtml(joins[i - 1]);
-        const word = tatweels?.[i - line.start] ? kashidaHtml(unit, tatweels[i - line.start]) : escapeHtml(unit);
+        const word = tatweels?.[i - line.start] ? kashidaHtml(unit, tatweels[i - line.start], options.kashida) : escapeHtml(unit);
         if (highlight) {
           const moved = wordLine![wordOf[i]] !== lineIndex ? ' class="moved-word"' : '';
           inner += `<span${moved}>${word}</span>`;
@@ -104,7 +110,7 @@ export function renderOptimized(target: HTMLElement, layouts: Layout[], source: 
         ? escapeHtml(separator ? joins[line.end - 1] ?? '' : /\s$/u.test(units[line.end - 1] ?? '') ? ' ' : '')
         : '';
       lines.push(`<span class="composed-line${line.overflow ? ' overflowing' : ''}"`
-        + ` style="letter-spacing:${base + line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}--line-width:${cssRem(line.width, root)}"`
+        + ` style="letter-spacing:${base + line.tracking}em;${line.stretch !== 100 ? `font-stretch:${line.stretch}%;` : ''}${indent && lineIndex === 0 ? `margin-inline-start:${indent};width:calc(100% - ${indent});` : ''}--line-width:${cssRem(line.width, root)}"`
         + ` data-paragraph="${pIndex}" data-line="${lineIndex}"`
         + `${inspection ? ' tabindex="0"' : ' tabindex="-1"'}>`
         + `<span class="line-text"${line.wordSpacing ? ` style="word-spacing:${line.wordSpacing}em"` : ''}>${inner}</span>${trailing}</span>`);
