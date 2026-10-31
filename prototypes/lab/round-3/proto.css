@@ -30,7 +30,7 @@
   /* Room the paragraph numbers take before the text: their width and their gap. */
   --num-w: 2.25rem;
   --num-gap: .75rem;
-  --panel-w: 24rem;
+  --panel-w: 26.25rem;
   --tiny: .6875rem;
 
   --size: 1.2rem;
@@ -56,6 +56,10 @@ button, select, input { font: inherit; color: inherit; }
 button { background: none; border: 0; padding: 0; cursor: pointer; text-transform: inherit; letter-spacing: inherit; }
 a { color: inherit; text-decoration: none; }
 [hidden] { display: none !important; }
+/* The header and the panel are all controls: a quick click, a double-click to reset
+   or a fast tap mustn't select their words. The text, its caption and the status
+   bar stay selectable. */
+.top, .panel, .handle, .exit { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 ::selection { background: color-mix(in srgb, var(--fg) 22%, transparent); }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
 
@@ -68,6 +72,23 @@ a { color: inherit; text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .hl:hover { background: var(--fg); color: var(--bg); } }
 @media (pointer: coarse) { .hl:active { background: var(--fg); color: var(--bg); } }
 .hl[aria-pressed='true'], .hl[aria-selected='true'] { background: var(--fg); color: var(--bg); }
+
+/* Header looks (HD in proto.js). Stops and idle: specimen S-11, the chosen word in
+   ink and underlined, the others at half ink, the slashes fainter still. */
+:is([data-hd='stops'], [data-hd='idle']) .modes .hl {
+  color: color-mix(in srgb, var(--fg) 52%, transparent);
+  background: none;
+  text-decoration: underline transparent var(--ul-w, .1em);
+  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto;
+  transition: color .12s, text-decoration-color .12s;
+}
+:is([data-hd='stops'], [data-hd='idle']) .modes .hl[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
+:is([data-hd='stops'], [data-hd='idle']) .modes .seg > .muted:not(:first-child) { color: color-mix(in srgb, var(--fg) 20%, transparent); }
+@media (hover: hover) and (pointer: fine) {
+  :is([data-hd='stops'], [data-hd='idle']) .modes .hl:hover { background: none; color: var(--fg); }
+}
+/* Idle: a row with nothing on stays in ink; one on, the others step back. */
+[data-hd='idle'] .modes .seg:not(:has([aria-pressed='true'])) .hl { color: var(--fg); }
 
 .brand { display: flex; gap: 1rem; align-items: baseline; }
 .brand b { font-weight: 500; }
@@ -110,7 +131,6 @@ main { overflow-y: auto; min-width: 0; }
 .status .sep { margin-inline: .65rem; }
 .readings { display: none; }
 .exit { display: none; }
-.narrow { display: none; }
 
 /* ---------------------------------------------------------------------------
    Panel. Round 1 A's rows, with the site's right-aligned labels in a gutter.
@@ -127,20 +147,22 @@ main { overflow-y: auto; min-width: 0; }
 .tabs { display: none; }
 .group {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
-  column-gap: 1rem;
-  align-items: first baseline;
-  padding-block: .85rem 1rem;
+  grid-template-columns: 6.25rem minmax(0, 1fr);
+  column-gap: 1.5rem;
+  align-items: start;
+  padding-block: 1.1rem 1.25rem;
   border-top: var(--hair);
 }
 .group:first-child { border-top: 0; padding-top: 0; }
+/* The same size and settings as the row label beside it, so TYPE and Typeface
+   share a cap height. Set off the top by a row's padding, not aligned to the
+   first row's baseline, so it stays put whatever its group shows or folds. */
 .group h2 {
   font: inherit;
-  font-size: .8125rem;
   text-transform: uppercase;
   text-align: right;
   margin: 0;
-  padding-top: .3rem;
+  padding-top: .5rem;
 }
 .rows { min-width: 0; display: flex; flex-direction: column; }
 
@@ -149,20 +171,24 @@ main { overflow-y: auto; min-width: 0; }
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: .75rem;
-  padding: .3rem 0;
+  padding: .5rem 0;
 }
-.row > input[type='range'], .row > .sel { grid-column: 1 / -1; }
+.row > input[type='range'] { grid-column: 1 / -1; }
 .row .lbl { display: flex; gap: .5rem; align-items: baseline; min-width: 0; white-space: nowrap; }
 .row .out { display: flex; gap: .5rem; align-items: baseline; }
 .row.toggle { align-items: center; cursor: pointer; }
 .row.dim > * { opacity: .4; }
-.row.split > .out, .row.split > input { display: none; }
+/* Split, the number moves to the two rows below; the option stays to relink. */
+.row.split > .out > output, .row.split > input { display: none; }
 /* Auto width: the value is read from the window, not set. Grey number, hollow thumb,
    as a computed value reads in an inspector. Black and solid once you set it. */
-.row.is-auto output { color: var(--fg-2); }
+.row.is-auto output, .row.is-capped output { color: var(--fg-2); }
 .row.is-auto input[type='range']::-webkit-slider-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
 .row.is-auto input[type='range']::-moz-range-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
 .row.sub .lbl { padding-inline-start: 1rem; }
+/* A split pair reads as one group, its heading over Shrink and Stretch: room after
+   it before the next slider or "more". */
+.row.sub:not([hidden]) + :is(.row:not(.sub), .fold) { margin-top: .9rem; }
 .row.note .sub { font-size: .8125rem; text-transform: uppercase; color: var(--fg-2); padding-top: .4rem; }
 .row .ar { font-size: 1.05em; letter-spacing: .12em; }
 .opt { font-size: .8125rem; color: var(--fg-2); }
@@ -184,10 +210,171 @@ main { overflow-y: auto; min-width: 0; }
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) { .sk { transition: none; } }
+
+/* The buttons beside a label: auto and linked in four looks to try, picked at the
+   panel's foot; the indent's ch / % below. Each reaches past its word, for fingers. */
+.lbl button, .out button { position: relative; line-height: 1.3; }
+.lbl button::after, .out button::after { content: ''; position: absolute; inset: -.6rem -.15rem; }
+.sk .over { padding: inherit; }
+/* The unit, ch / %, is specimen S-11's word stops in every look: the chosen word
+   in ink and underlined, the other at half ink, the slash fainter still. */
+.unit { display: inline-flex; align-items: baseline; white-space: pre; font-weight: 450; }
+.unit button {
+  color: color-mix(in srgb, var(--fg) 52%, transparent);
+  text-decoration: underline transparent var(--ul-w, .1em);
+  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto;
+  transition: color .12s, text-decoration-color .12s;
+}
+.unit button[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
+.unit .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
+/* Underline: specimen S-11, as ch / % — on in ink and underlined; off at half ink,
+   struck through as T-04. */
+[data-chip='underline'] .opt.sk .base { color: color-mix(in srgb, var(--fg) 52%, transparent); text-decoration: underline transparent var(--ul-w, .1em); text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto; transition: color .12s, text-decoration-color .12s; }
+[data-chip='underline'] .opt.sk[aria-pressed='true'] .base { color: var(--fg); text-decoration-color: var(--fg); }
+
+/* Where a slider's option sits (OPTS in proto.js). Written in each place; one shows. */
+.at-label, .at-value, .at-below { display: none; }
+[data-place='label'] .at-label, [data-place='value'] .at-value { display: contents; }
+[data-place='below'] .at-below { display: block; grid-column: 1 / -1; }
+/* Beside the label: room between its underline and the slider. */
+[data-place='label'] .row.range:has(.at-label) > input[type='range'] { margin-top: .4rem; }
+/* Hybrid and glide: auto and linked beside the label, ch / % beside the number.
+   Every slider gets the label's room, so the rows keep one rhythm. */
+:is([data-place='hybrid'], [data-place='glide']) :is(.at-label:not(.u), .at-value.u) { display: contents; }
+:is([data-place='hybrid'], [data-place='glide']) .row.range > input[type='range'] { margin-top: .4rem; }
+/* Glide: split, linked goes to the row's end, where the number was. The label and
+   the number share the first line, so the number can stay put while it fades.
+   Splitting, it leaves first (.1s, NUMBER_OUT in proto.js) and linked slides in
+   after; joining, linked slides back and the number returns once it's gone (.3s). */
+[data-place='glide'] .row.range > .lbl { grid-area: 1 / 1; }
+[data-place='glide'] .row.range > .out { grid-area: 1 / 2; transition: opacity .16s .3s; }
+[data-place='glide'] .row.split > .lbl { grid-column: 1 / -1; }
+[data-place='glide'] .row.split > .lbl [data-linked] { margin-inline-start: auto; }
+[data-place='glide'] .row.split > .out > output { display: inline; }
+[data-place='glide'] .row.split > .out { opacity: 0; visibility: hidden; transition: opacity .1s, visibility 0s .1s; }
+@media (prefers-reduced-motion: reduce) { [data-place='glide'] .row.range > .out { transition: none; } }
+/* Below: a line of its own, as Hyphens' start. The whole line presses. */
+.opt-row { display: flex; align-items: center; gap: .55rem; width: 100%; padding-top: .3rem; font-size: .8125rem; text-align: start; }
+.opt-row .sq { width: .75rem; height: .75rem; border: var(--rule); flex-shrink: 0; transition: background-color .2s; }
+.opt-row[aria-pressed='true'] .sq { background: var(--fg); }
+.opt-row .w { color: color-mix(in srgb, var(--fg) 52%, transparent); transition: color .12s; }
+.opt-row[aria-pressed='true'] .w { color: var(--fg); }
+.opt-row .about { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opt-row:has([data-unit='ch'][aria-pressed='true']) [data-says='%'],
+.opt-row:has([data-unit='%'][aria-pressed='true']) [data-says='ch'] { display: none; }
+.opt-row .unit { font-size: inherit; }
+/* Outline and fill: a box, as the site's .btn-style-1. */
+:is([data-chip='outline'], [data-chip='fill']) .opt.sk { border: 1px solid var(--fg-3); padding: 0 .3em; transition: --k .28s cubic-bezier(.2, .8, .2, 1), border-color .2s, background-color .2s; }
+:is([data-chip='outline'], [data-chip='fill']) .opt.sk[aria-pressed='true'] { border-color: var(--fg); }
+/* Fill: black when on, no strike. */
+[data-chip='fill'] .opt.sk .over { display: none; }
+[data-chip='fill'] .opt.sk[aria-pressed='true'] { background: var(--fg); }
+[data-chip='fill'] .opt.sk[aria-pressed='true'] .base { color: var(--bg); }
 .more { align-self: flex-start; font-size: .8125rem; color: var(--fg-2); margin-top: .4rem; }
+
+/* The mark on dropdowns and "n more" (MK in proto.js). It turns over as "more" opens. */
+.mk { display: inline-block; flex-shrink: 0; transition: rotate .2s cubic-bezier(.2, .8, .2, 1); }
+[aria-expanded='true'] .mk { rotate: 180deg; }
+.more .mk { margin-inline-start: .2em; }
+@media (prefers-reduced-motion: reduce) { .mk { transition: none; } }
+/* Arrow: as before. */
+[data-mk='arrow'] .mk::before { content: '↓'; }
+/* Chevron: a drawn hairline V, the width of the text's own strokes. Plus uses it on
+   dropdowns. */
+:is([data-mk='chevron'] .mk, [data-mk='plus'] .dd .mk, [data-mk='quiet'] .more .mk) {
+  width: .4em;
+  height: .4em;
+  border: solid currentColor;
+  border-width: 0 max(1px, .085em) max(1px, .085em) 0;
+  rotate: 45deg;
+  translate: 0 -.18em;
+}
+:is([data-mk='chevron'], [data-mk='quiet']) [aria-expanded='true'] .mk { rotate: 225deg; translate: 0 .08em; }
+/* Caret: a small solid triangle. */
+[data-mk='caret'] .mk { width: .55em; height: .3em; background: currentColor; clip-path: polygon(0 0, 100% 0, 50% 100%); translate: 0 -.12em; }
+/* Plus: + and − for "more". */
+[data-mk='plus'] .more .mk::before { content: '+'; }
+[data-mk='plus'] .more[aria-expanded='true'] .mk { rotate: none; }
+[data-mk='plus'] .more[aria-expanded='true'] .mk::before { content: '−'; }
+/* Corner: a dog-ear. In a dropdown it sits in the box's bottom corner, out of the
+   text's way; after "more", small, on the baseline. */
+[data-mk='corner'] .mk { width: .38em; height: .38em; background: currentColor; clip-path: polygon(100% 0, 100% 100%, 0 100%); }
+[data-mk='corner'] .dd-a { width: 0; margin-inline-start: -.6rem; }
+[data-mk='corner'] .dd-v { margin-inline-end: .45em; }
+[data-mk='corner'] .dd .mk { position: absolute; inset-inline-end: 2px; bottom: 2px; width: .45em; height: .45em; }
+[dir='rtl'] [data-mk='corner'] .dd .mk, [data-mk='corner'] [dir='rtl'] .dd .mk { clip-path: polygon(0 0, 100% 100%, 0 100%); }
+/* None: no mark. "more" reads as a link. Quiet: none on dropdowns, a chevron on
+   "more". */
+[data-mk='none'] .mk, [data-mk='quiet'] .dd .mk { display: none; }
+:is([data-mk='none'], [data-mk='quiet']) .dd-a { width: 0; margin-inline-start: -.6rem; }
+[data-mk='none'] .more { text-decoration: underline var(--ul-w, .1em); text-underline-offset: var(--ul, 3px); text-decoration-skip-ink: auto; }
 .gnote { margin: .35rem 0 0; font-size: .8125rem; color: var(--fg-2); text-wrap: pretty; }
 .gnote button { color: var(--fg); }
-.foot { display: flex; justify-content: flex-end; padding-top: 1rem; border-top: var(--hair); font-size: .8125rem; }
+/* The prototype's pickers, one a line: the name, then its choices, which wrap
+   under each other, not under the name. "reset all" closes the panel. */
+.foot { display: flex; flex-direction: column; gap: .5rem; padding-top: 1rem; border-top: var(--hair); font-size: .8125rem; }
+.pick { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); gap: .45rem; align-items: baseline; }
+.pick .ch { display: flex; flex-wrap: wrap; gap: .1rem .45rem; align-items: baseline; }
+/* The underlines, to try: every underline reads --ul (offset) and --ul-w (thickness). */
+.pick:has([data-ul]) { align-items: center; }
+.pick .ch:has([data-ul]) { flex-wrap: nowrap; align-items: center; gap: .75rem; }
+.pick .ch:has([data-ul]) > .muted { min-width: 4rem; }
+.pick [data-ul] { flex: 1; min-width: 0; }
+.pick [data-ul-v] { flex-shrink: 0; min-width: 5ch; text-align: end; }
+.foot [data-reset-all] { align-self: flex-end; margin-top: .5rem; }
+
+/* Folds: a switched group's options while it's off, a group's extra ones until
+   "more". Grid rows from 0fr to 1fr animate in every browser, unlike height: auto. */
+.fold { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .32s cubic-bezier(.2, .8, .2, 1); }
+.fold.shut { grid-template-rows: 0fr; }
+/* A few pixels each side so focus rings and thumbs aren't clipped. */
+.fold-in { min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-inline: 3px; margin-inline: -3px; transition: opacity .25s .05s, visibility 0s; }
+.fold.shut > .fold-in { opacity: 0; visibility: hidden; transition: opacity .15s, visibility 0s .32s; }
+@media (prefers-reduced-motion: reduce) { .fold, .fold-in, .fold.shut > .fold-in { transition: none; } }
+
+/* A switched group's on/off (Hyphens, Kashida), in the look picked at the panel's
+   foot. The title always toggles it. */
+.gt-title { cursor: pointer; }
+.gt-title.boxed::before, .gt-title.boxed::after, .master-cell .sq {
+  width: .875rem;
+  height: .875rem;
+  border: var(--rule);
+  flex-shrink: 0;
+  transition: background-color .2s;
+}
+.gt-title.boxed { display: inline-flex; gap: .5rem; align-items: center; }
+[data-gt='gutter'] .gt-title.boxed::before, [data-gt='edge'] .gt-title.boxed::after { content: ''; }
+.gt-title.boxed[aria-pressed='true']::before, .gt-title.boxed[aria-pressed='true']::after { background: var(--fg); }
+/* What the group does, in the line an off group leaves empty. */
+.about { color: var(--fg-2); text-wrap: pretty; }
+p.about-row { display: block; margin: 0; }
+/* Start: the box, then what it does. */
+.master-start { grid-template-columns: auto minmax(0, 1fr); column-gap: .6rem; align-items: center; cursor: pointer; }
+.master-start .about { align-self: baseline; }
+/* Switch: off / on, as the header's left / centre. */
+.master-switch { grid-template-columns: auto minmax(0, 1fr); column-gap: 1rem; }
+.onoff { display: flex; gap: .45rem; align-items: baseline; }
+/* What it does, while it's off. */
+.master-switch .about { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .2s; }
+.master-switch:has([data-set-v='1'][aria-pressed='true']) .about { opacity: 0; }
+/* Cell: one rectangle that presses, square at its corner. Its words sit where a
+   row's would, so the title lines up. */
+.row:has(> .master-cell) { display: block; padding: 0 0 .35rem; }
+.master-cell {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  text-align: start;
+  padding: calc(.5rem - 1px) .6rem;
+  border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+  transition: border-color .2s;
+}
+.master-cell[aria-pressed='true'] { border-color: var(--fg); }
+.master-cell[aria-pressed='true'] .about { color: var(--fg); }
+.master-cell[aria-pressed='true'] .sq { background: var(--fg); }
+@media (hover: hover) and (pointer: fine) { .master-cell:hover { border-color: var(--fg); } }
 
 input[type='range'] {
   appearance: none;
@@ -215,6 +402,15 @@ input[type='range']::-webkit-slider-thumb {
   border-radius: 0;
 }
 input[type='range']::-moz-range-thumb { width: .5rem; height: 1rem; background: var(--fg); border: 0; border-radius: 0; }
+/* A finger needs more than a hairline: a taller slider, a bigger thumb, and the
+   option line below as tall as a fingertip. */
+@media (pointer: coarse) {
+  input[type='range'] { height: 2rem; }
+  input[type='range']::-webkit-slider-thumb { width: .75rem; height: 1.5rem; margin-top: calc(-.75rem + .5px); }
+  input[type='range']::-moz-range-thumb { width: .75rem; height: 1.5rem; }
+  .opt-row { min-height: 2.75rem; padding-top: 0; font-size: .875rem; }
+  .opt-row .unit button { padding-block: .6rem; }
+}
 
 input[type='checkbox'] {
   appearance: none;
@@ -227,17 +423,50 @@ input[type='checkbox'] {
 }
 input[type='checkbox']:checked { background: var(--fg); }
 
-.sel { position: relative; display: block; margin-top: .2rem; }
-.sel::after { content: '↓'; position: absolute; right: .5em; top: 50%; translate: 0 -50%; pointer-events: none; }
-.sel select {
-  appearance: none;
-  width: 100%;
-  border: var(--rule);
-  border-radius: 0;
-  background: transparent;
-  padding: .3em 1.6em .3em .45em;
-  cursor: pointer;
-}
+/* Dropdowns. The select lies over the drawn box, invisible, and takes the clicks.
+   Six looks, picked at the panel's foot (DD in proto.js). */
+.row.select { display: block; }
+.dd { position: relative; display: block; cursor: pointer; }
+.dd select { position: absolute; inset: 0; width: 100%; opacity: 0; appearance: none; cursor: pointer; font: inherit; }
+.dd-box { display: flex; align-items: baseline; gap: .6rem; }
+.dd-v { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-a { flex-shrink: 0; display: inline-flex; align-items: center; align-self: center; }
+.dd:has(select:focus-visible) { outline: 2px solid var(--fg); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) { .dd:hover .dd-a { translate: 0 .1em; } }
+.dd-a { transition: translate .15s; }
+
+/* Stack: the title above a box, as before. Only the box opens it. */
+/* One-line looks: the row starts higher by the box's padding and border, so the
+   words in it sit on the line a group's title does. */
+:is([data-dd='inline'], [data-dd='split']) .row.select { padding-top: calc(.5rem - .3em - 1px); }
+[data-dd='rule'] .row.select { padding-top: calc(.5rem - .3em); }
+
+[data-dd='stack'] .dd-l { display: block; margin-bottom: .35rem; }
+[data-dd='stack'] .dd-box { position: relative; border: var(--rule); padding: .3em .5em .3em .45em; }
+/* Inline: one box, the title on the left as a slider's label, the value on the
+   right where a slider's number is. */
+[data-dd='inline'] .dd { display: flex; align-items: baseline; gap: .75rem; border: var(--rule); padding: .3em .5em .3em .45em; }
+[data-dd='inline'] .dd-l { color: var(--fg-2); flex-shrink: 0; }
+[data-dd='inline'] .dd-box { flex: 1; min-width: 0; }
+[data-dd='inline'] .dd-v { text-align: end; }
+/* Caption: a small title in the box's corner, the value under it. */
+[data-dd='caption'] .dd { border: var(--rule); padding: .35em .5em .4em .45em; }
+[data-dd='caption'] .dd-l { display: block; font-size: var(--tiny); text-transform: uppercase; color: var(--fg-2); line-height: 1.2; margin-bottom: .15rem; }
+/* Legend: the title set into the top border, as a fieldset's, or a drawing's
+   title on its frame. */
+[data-dd='legend'] .row.select { padding-top: .9rem; }
+[data-dd='legend'] .dd { border: var(--rule); padding: .45em .5em .3em .45em; }
+[data-dd='legend'] .dd-l { position: absolute; top: 0; inset-inline-start: .35rem; translate: 0 -55%; padding: 0 .3rem; background: var(--bg); font-size: var(--tiny); text-transform: uppercase; color: var(--fg-2); line-height: 1; }
+/* Split: a cell for the title, ruled off from the value's, as a spec sheet's row. */
+[data-dd='split'] .dd { display: grid; grid-template-columns: 5.75rem minmax(0, 1fr); border: var(--rule); }
+[data-dd='split'] .dd-l { padding: .3em .5em .3em .45em; border-inline-end: var(--hair); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-dd='split'] .dd-box { padding: .3em .5em .3em .5em; }
+/* Rule: no box. The row is the dropdown, a line under it, black on hover as the
+   site's links. */
+[data-dd='rule'] .dd { display: flex; align-items: baseline; gap: .75rem; padding: .3em .2em; margin-inline: -.2em; border-bottom: var(--rule); }
+[data-dd='rule'] .dd-box { flex: 1; min-width: 0; }
+[data-dd='rule'] .dd-v { text-align: end; }
+@media (hover: hover) and (pointer: fine) { [data-dd='rule'] .dd:hover { background: var(--fg); color: var(--bg); } }
 
 /* ---------------------------------------------------------------------------
    Columns. The unjustified one alone, or the browser's beside it. Side by side
@@ -275,14 +504,14 @@ input[type='checkbox']:checked { background: var(--fg); }
   padding-bottom: .4rem;
   border-bottom: var(--rule);
 }
+[data-name][contenteditable='plaintext-only'] { min-width: 3ch; outline: none; cursor: text; caret-color: currentColor; }
 .col-head .m { text-transform: none; color: var(--fg-2); direction: ltr; unicode-bidi: isolate; }
 
-/* Under the head, four styles to try (Show › Ruler). Each but None marks the rag
+/* Under the head, three styles to try (Show › Ruler). Each but None marks the rag
    zone at the line's end: the same line turns dashed there, a drawing's mark for
    a tolerance, like the dashed width handle. Opaque, so it covers the solid rule. The height stays the same in every style, so switching never moves
    the text. */
 .ruler { position: relative; width: var(--measure-px); height: .9rem; margin-bottom: 1.35rem; }
-.ruler .w { display: none; }
 .ruler::after {
   content: '';
   position: absolute;
@@ -300,27 +529,6 @@ input[type='checkbox']:checked { background: var(--fg); }
     linear-gradient(90deg, color-mix(in srgb, var(--fg) 15%, transparent) 1px, transparent 0) 0 0 / 10px .25rem repeat-x;
 }
 [dir='rtl'][data-ruler='ticks'] .ruler, [data-ruler='ticks'] [dir='rtl'] .ruler { background-position: right 0 top 0, right 0 top 0; }
-/* Dimension: a drawing's dimension line, end to end, with the width in its middle. */
-[data-ruler='dimension'] .ruler {
-  --d: color-mix(in srgb, var(--fg) 30%, transparent);
-  background:
-    linear-gradient(var(--d), var(--d)) 0 50% / 100% 1px no-repeat,
-    linear-gradient(var(--d), var(--d)) 0 0 / 1px 100% no-repeat,
-    linear-gradient(var(--d), var(--d)) 100% 0 / 1px 100% no-repeat;
-}
-[data-ruler='dimension'] .ruler::after { top: calc(50% - .5px); background: repeating-linear-gradient(90deg, var(--d) 0 3px, var(--bg) 3px 6px); }
-[data-ruler='dimension'] .ruler .w {
-  display: block;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-  padding: 0 .4rem;
-  background: var(--bg);
-  font-size: var(--tiny);
-  line-height: 1;
-  color: var(--fg-2);
-}
 
 .frame { position: relative; width: fit-content; }
 
@@ -367,11 +575,9 @@ input[type='checkbox']:checked { background: var(--fg); }
 [data-indent='first'] .text p:not(:first-child), [data-indent='rest'] .text p:first-child { text-indent: 0; }
 .text[data-col='u'] { text-wrap: pretty; }
 .justify-u .text[data-col='u'], .justify-b .text[data-col='b'] { text-align: justify; }
-/* Holding ragged or justified: the browser's column takes the unjustified one's
-   place, same width, same spot. */
-:root[data-peeking] .col[data-col='u'] { display: none; }
-:root[data-peeking] .col[data-col='b'] { display: block; }
-[data-peek] { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+/* Which native text vs browser shows. It sits left of vs browser, so the
+   button you just pressed doesn't move when it appears. */
+:root:not([data-compare]) .seg.vs { display: none; }
 .guides .text {
   background: repeating-linear-gradient(transparent 0 calc(var(--size) * var(--lh) - 1px), color-mix(in srgb, var(--fg) 14%, transparent) 0 calc(var(--size) * var(--lh)));
 }
@@ -434,7 +640,7 @@ input[type='checkbox']:checked { background: var(--fg); }
 
 /* The panel takes the spare width and lays its groups in two columns. */
 @media (min-width: 87.5em) {
-  [data-layout='wide'] { --panel-w: 42rem; }
+  [data-layout='wide'] { --panel-w: 46rem; }
   [data-layout='wide'] .groups { columns: 2; column-gap: 2rem; }
   /* Rules under each group, so neither column starts with one. */
   [data-layout='wide'] .group { break-inside: avoid; border-top: 0; border-bottom: var(--hair); padding-block: 0 1rem; margin-bottom: .85rem; }
@@ -481,8 +687,6 @@ input[type='checkbox']:checked { background: var(--fg); }
   .top { padding: 1rem var(--margin); flex-wrap: wrap; row-gap: .6rem; }
   .modes { gap: 1.1rem; }
   .seg { gap: .5rem; }
-  .wide { display: none; }
-  .narrow { display: inline; }
   main { overflow: visible; padding-bottom: 4rem; }
   .stage { padding-top: 1.25rem; margin-top: 0 !important; }
   .status { display: none; }
@@ -525,6 +729,8 @@ input[type='checkbox']:checked { background: var(--fg); }
   .group { display: none; grid-template-columns: minmax(0, 1fr); border: 0; padding: 0; }
   .group.on { display: grid; }
   .group h2 { display: none; }
+  /* No titles on a phone, but a boxed title is the switch, so it stays. */
+  .group h2:has(.boxed) { display: block; text-align: start; padding-top: 0; }
   .foot { margin-top: 1rem; }
   [data-read] .pair, [data-read].numbers .pair { padding-inline: var(--margin); }
   [data-read] .exit { font-size: 2.25rem; }

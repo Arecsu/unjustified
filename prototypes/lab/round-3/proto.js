@@ -74,8 +74,10 @@ const GROUPS = [
     select('typeface', 'Typeface', Object.keys(FONTS)),
     range('size', 'Size', 0.75, 4.5, 0.05, 1.2, 'rem'),
     range('measure', 'Width', 15, 150, 1, 40, 'ch', { auto: true }),
-    range('indent', 'Indent', 0, 80, 1, 0, 'ch'),
-    select('indentAt', 'Indented', ['Every paragraph', 'First only', 'All but first'], { adv, dep: () => state.indent > 0 }),
+    // Indent in ch, or in % of the width; one row shows, per ui.unit.
+    range('indent', 'Indent', 0, 80, 1, 0, 'ch', { units: true, show: () => ui.unit === 'ch' }),
+    range('indentPct', 'Indent', 0, 90, 1, 0, '%', { units: true, show: () => ui.unit === '%' }),
+    select('indentAt', 'Indented', ['Every paragraph', 'First only', 'All but first'], { adv, dep: () => (ui.unit === '%' ? state.indentPct : state.indent) > 0 }),
     range('lh', 'Line height', 0.9, 2, 0.05, 1.55, '', { adv }),
     range('ls', 'Letter spacing', -0.05, 0.1, 0.005, 0, 'em', { adv }),
     range('maxw', 'Auto up to', 30, 120, 1, 70, 'ch', { adv, dep: () => ui.auto }),
@@ -97,7 +99,7 @@ const GROUPS = [
     range('stretch', 'Stretch', 0, 1000, 10, 200, '%', { of: 'space', plus: true }),
     range('widthFlex', 'Width flex', 0, 40, 1, 0, '%', { adv }),
   ] },
-  { id: 'hyph', label: 'Hyphens', controls: [
+  { id: 'hyph', label: 'Hyphens', master: 'hyphenate', about: 'Break words at line ends', controls: [
     toggle('hyphenate', 'Hyphenate'),
     select('hyLang', 'Language', ['English US', 'English UK', 'Español', 'Deutsch', 'Français'], { dep: hyOn }),
     range('hyFreq', 'Frequency', 0, 100, 5, 50, '%', { adv, dep: hyOn }),
@@ -105,7 +107,7 @@ const GROUPS = [
     range('hyBefore', 'Letters before', 1, 5, 1, 2, '', { adv, dep: hyOn }),
     range('hyAfter', 'Letters after', 2, 6, 1, 3, '', { adv, dep: hyOn }),
   ] },
-  { id: 'kash', label: 'Kashida', controls: [
+  { id: 'kash', label: 'Kashida', master: 'kashida', about: 'Stretch Arabic letters', controls: [
     toggle('kashida', 'Kashida'),
     range('kaLine', 'Per line', 1, 4, 1, 2, '', { dep: kaOn }),
     range('kaFreq', 'Frequency', 0, 100, 5, 50, '%', { adv, dep: kaOn }),
@@ -119,8 +121,8 @@ const GROUPS = [
   ] },
   { id: 'show', label: 'Show', controls: [
     toggle('numbers', 'Paragraph numbers', true),
-    select('ruler', 'Ruler', ['Hairline', 'Dimension', 'Ticks', 'None']),
-    select('label', 'Label', ['Spec', 'Block', 'Figure', 'Sample', 'None'], { show: () => !ui.compare }),
+    select('ruler', 'Ruler', ['Hairline', 'Ticks', 'None']),
+    select('label', 'Label', ['Figure', 'Spec', 'Block', 'Sample', 'None'], { show: () => !ui.compare }),
     toggle('diag', 'Rag zone'),
     toggle('guides', 'Line guides'),
     toggle('twMarks', 'Tatweels', false, { show: () => hasArabic() }),
@@ -135,15 +137,20 @@ const DEFAULTS = { ...state };
 // A linked pair's slider sets its + side. Tracking's − side follows at this ratio,
 // symmetric; word spacing's shrink stays put (−20%) until split.
 const RATIO = { track: -1 };
-const ui = { auto: true, linked: { track: true, space: true }, ratio: { ...RATIO }, open: new Set(), compare: false, read: false, focus: false, layout: 'left', vs: 'ragged', peek: null };
+const ui = { auto: true, linked: { track: true, space: true }, ratio: { ...RATIO }, open: new Set(), compare: false, read: false, focus: false, layout: 'left', vs: 'ragged', gt: 'start', chip: 'underline', opts: 'glide', dd: 'inline', hd: 'block', mk: 'quiet', unit: 'ch', caption: null };
 // The width the text is set at: the slider's value, or the auto width.
 let measureNow = state.measure;
+// The most indent in ch the width allows.
+let indentCap = Infinity;
 
 function format(k) {
   const c = CONTROLS[k], v = state[k];
   if (c.type === 'toggle') return v ? 'on' : 'off';
   if (c.type === 'select') return v;
   if (k === 'measure') return measureNow + ' ch';
+  // Beside the number, ch / % is the number's unit, so it isn't written twice.
+  if (c.units && ['value', 'hybrid', 'glide'].includes(place())) return String(k === 'indent' ? Math.min(v, indentCap) : v);
+  if (k === 'indent') return Math.min(v, indentCap) + ' ch';
   if (c.pair) {
     const [a, b] = c.pair;
     // Linked shows one number, the stretch the slider sets: ± when the sides match.
@@ -192,6 +199,7 @@ function resetAll() {
   ui.auto = true;
   ui.linked = { track: true, space: true };
   ui.ratio = { ...RATIO };
+  ui.unit = 'ch';
   loadSample();
   Object.keys(state).forEach(paint);
   apply();
@@ -215,13 +223,11 @@ function apply() {
   s.setProperty('--font', FONTS[state.typeface]);
   s.setProperty('--hyphens', hyOn() ? 'auto' : 'manual');
   s.setProperty('--rag', state.rag);
-  s.setProperty('--indent', state.indent + 'ch');
   root.dataset.indent = { 'Every paragraph': 'all', 'First only': 'first', 'All but first': 'rest' }[state.indentAt];
-  for (const [cls, on] of [['justify-u', state.justify], ['justify-b', (ui.peek ?? ui.vs) === 'justified'], ['guides', state.guides], ['diag', state.diag], ['tw-marks', state.twMarks], ['numbers', state.numbers]]) root.classList.toggle(cls, on);
+  for (const [cls, on] of [['justify-u', state.justify], ['justify-b', ui.vs === 'justified'], ['guides', state.guides], ['diag', state.diag], ['tw-marks', state.twMarks], ['numbers', state.numbers]]) root.classList.toggle(cls, on);
   root.toggleAttribute('data-compare', ui.compare);
   root.toggleAttribute('data-read', ui.read);
   root.toggleAttribute('data-focus', ui.focus);
-  root.toggleAttribute('data-peeking', !!ui.peek);
   root.dataset.ruler = state.ruler.toLowerCase();
   const rtl = state.direction === 'RTL' || (state.direction === 'Auto' && hasArabic());
   root.classList.toggle('rtl', rtl);
@@ -267,9 +273,16 @@ function layout() {
     measureNow = w;
     paint('measure');
   }
+  // An indent in ch shows at most 90% of the width, the most the % slider allows.
+  // Your number is kept: widen the column again and it comes back.
+  indentCap = Math.floor(w * .9);
+  const input = document.querySelector('#in-indent');
+  if (input) input.max = indentCap;
+  paint('indent');
+  document.querySelector('[data-row="indent"]')?.classList.toggle('is-capped', state.indent > indentCap);
+  root.style.setProperty('--indent', ui.unit === '%' ? state.indentPct + '%' : Math.min(state.indent, indentCap) + 'ch');
   root.style.setProperty('--measure', w + 'ch');
   root.style.setProperty('--measure-px', w * ch + 'px');
-  for (const el of document.querySelectorAll('[data-m="width"]')) el.textContent = w + ' ch';
   for (const el of document.querySelectorAll('[data-m="u.width"]')) el.textContent = (ui.auto ? 'auto ' : '') + w + ' ch';
 }
 
@@ -280,18 +293,134 @@ function rowHTML(c) {
   const cls = `row ${c.type}${c.of ? ' sub' : ''}`;
   const row = `data-row="${c.k}"`;
   if (c.type === 'note') return `<div class="${cls}" ${row}><span class="sub">${c.label}</span></div>`;
-  if (c.type === 'toggle') return `<label class="${cls}" ${row}><span class="lbl">${c.label}</span><input type="checkbox" data-k="${c.k}" ${state[c.k] ? 'checked' : ''} aria-label="${c.aria ?? c.label}"></label>`;
-  if (c.type === 'select') return `<div class="${cls}" ${row}><label class="lbl" for="in-${c.k}">${c.label}</label><span></span><span class="sel"><select id="in-${c.k}" data-k="${c.k}">${c.options.map(o => `<option${o === state[c.k] ? ' selected' : ''}>${o}</option>`).join('')}</select></span></div>`;
+  if (c.type === 'toggle') return `<label class="${cls}" ${row}><span class="lbl">${c.label}</span><input type="checkbox" id="in-${c.k}" data-k="${c.k}" ${state[c.k] ? 'checked' : ''} aria-label="${c.aria ?? c.label}"></label>`;
+  // A dropdown is drawn (title, value, arrow) with the real select laid over it,
+  // invisible, so a click opens the browser's own menu. DD picks the look.
+  if (c.type === 'select') return `<div class="${cls}" ${row}><label class="dd"><span class="dd-l">${c.label}</span><span class="dd-box"><span class="dd-v" data-v="${c.k}">${format(c.k)}</span><span class="dd-a" aria-hidden="true"><span class="mk"></span></span><select id="in-${c.k}" data-k="${c.k}">${c.options.map(o => `<option${o === state[c.k] ? ' selected' : ''}>${o}</option>`).join('')}</select></span></label></div>`;
   // Specimen T-04: struck through when off.
   const strike = (attr, on, word, title) => `<button class="opt sk" ${attr} aria-pressed="${on}" title="${title}"><span class="base">${word}</span><span class="over" aria-hidden="true">${word}</span></button>`;
   const opt = c.pair ? strike(`data-linked="${c.k}"`, true, 'linked', 'One slider moves both sides')
-    : c.auto ? strike('data-auto', true, 'auto', 'Follow the window') : '';
-  return `<div class="${cls}" ${row}><span class="lbl"><label for="in-${c.k}">${c.label}</label>${opt}</span><span class="out"><output class="num" data-v="${c.k}">${format(c.k)}</output></span><input type="range" id="in-${c.k}" data-k="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${state[c.k]}" title="Double-click to reset"${c.auto ? '' : ` style="--d:${(DEFAULTS[c.k] - c.min) / (c.max - c.min)}"`}></div>`;
+    : c.auto ? strike('data-auto', true, 'auto', 'Follow the window')
+    : c.units ? `<span class="opt unit" role="group" aria-label="${c.label} unit"><button data-unit="ch" title="Characters, fixed">ch</button><span class="sl"> / </span><button data-unit="%" title="Percent of the width">%</button></span>` : '';
+  // Below the slider, as Hyphens' start: a box, the word, what it does.
+  const line = (attr, word, about) => `<button class="opt-row" ${attr} aria-pressed="true"><span class="sq" aria-hidden="true"></span><span class="w">${word}</span><span class="about">${about}</span></button>`;
+  const below = c.pair ? line(`data-linked="${c.k}"`, 'linked', 'one slider moves both sides')
+    : c.auto ? line('data-auto', 'auto', 'follows the window')
+    : c.units ? `<span class="opt-row">${opt}<span class="about" data-says="ch">characters, fixed</span><span class="about" data-says="%">a share of the width</span></span>` : '';
+  // The option is written in each place it can sit (OPTS); CSS shows one.
+  const at = (place, html) => html && `<span class="at-${place}${c.units ? ' u' : ''}">${html}</span>`;
+  const out = `<output class="num" data-v="${c.k}">${format(c.k)}</output>`;
+  return `<div class="${cls}" ${row}><span class="lbl"><label for="in-${c.k}">${c.label}</label>${at('label', opt)}</span><span class="out">${c.units ? out + at('value', opt) : at('value', opt) + out}</span><input type="range" id="in-${c.k}" data-k="${c.k}" min="${c.min}" max="${c.max}" step="${c.step}" value="${state[c.k]}" title="Double-click to reset"${c.auto ? '' : ` style="--d:${(DEFAULTS[c.k] - c.min) / (c.max - c.min)}"`}>${at('below', below)}</div>`;
+}
+
+// A switched group's on/off, to try. The empty line beside an off group is where
+// it says what it does, so it reads as a sentence, not a hole.
+// gutter: the box before the title; off, the line says what it does.
+// edge: the box after the title, at the gutter's edge, pointing at the options.
+// start: the box at the start of the options, with what it does after it.
+// switch: off / on, as the header's left / centre.
+// cell: one rectangle that presses, with a square at its corner (round 1 C).
+const GT = ['gutter', 'edge', 'start', 'switch', 'cell'];
+// How auto and linked read as buttons, to try: plain words as
+// before; underlined as specimen S-11 (struck through when off); boxed and struck
+// through when off; boxed and filled black when on.
+const CHIPS = ['plain', 'underline', 'outline', 'fill'];
+// Where a slider's option (auto, linked, ch / %) sits, to try: beside the label;
+// beside the number, where ch / % becomes the number's unit; on a line below the
+// slider; or by pointer, beside the number for a mouse and below for a finger.
+// hybrid: auto and linked beside the label, where switching them never moves them,
+// and ch / % beside the number as its unit. glide: hybrid, and linked slides to the
+// row's end as a pair splits, striking through on the way. Both go below for a finger.
+const OPTS = ['label', 'value', 'below', 'pointer', 'hybrid', 'glide'];
+// Dropdown looks, to try. stack: the title above a box, as before. The rest put the
+// title inside: inline, title and value on one line as a slider's; caption, a small
+// title over the value; legend, the title set into the top border; split, a cell
+// for the title ruled off from the value's; rule, no box, a line under the row.
+const DD = ['stack', 'inline', 'caption', 'legend', 'split', 'rule'];
+// The header's left / centre and the rest, to try. block: the site's black block, as
+// before. stops: specimen S-11, the chosen word in ink and underlined, the others at
+// half ink, so with nothing on, all of vs browser / focus / read rest at half. idle:
+// stops, but nothing on leaves them all in ink; one on, the others step back.
+const HD = ['block', 'stops', 'idle'];
+// The prototype's pickers, at the panel's foot: name, the ui key (also the URL
+// parameter and the root's data attribute), choices.
+// The underlines, to try (sliders at the panel's foot). The offset is one equation
+// through two points: the gap under 13px words (the panel's) and under 16px words
+// (the header's). It runs on each word's own size, 1em, the way fluid type runs on
+// the window's width:
+//   clamp(max(1px, .05em), calc(at13 + (1em - 13px) * slope), .5em),
+//   slope = (at16 - at13) / 3
+// so the gap can shrink as words grow, which no px floor or em share can do. The
+// clamp keeps far sizes sane: never under 1px, or a twentieth of a big word; never
+// over half the word. The thickness is a share of the word's size.
+const UL = { at13: 3, at16: 2, w: .1 };
+const UL_DEF = { ...UL };
+const UL_SLIDERS = {
+  at13: ['at 13 px', 'px', 0, 6, .25],
+  at16: ['at 16 px', 'px', 0, 6, .25],
+  w: ['thickness', 'em', .02, .2, .005],
+};
+const ulSlope = () => +((UL.at16 - UL.at13) / 3).toFixed(4);
+const ulOffset = () => `clamp(max(1px, .05em), calc(${UL.at13}px + (1em - 13px) * ${ulSlope()}), .5em)`;
+const ulSay = () => `${UL.at13}px + (1em − 13px) × ${String(ulSlope()).replace('-', '−')}`;
+function ulApply() {
+  root.style.setProperty('--ul', ulOffset());
+  root.style.setProperty('--ul-w', `${UL.w}em`);
+}
+function setUl(k, v) {
+  UL[k] = +v;
+  ulApply();
+  for (const el of document.querySelectorAll(`[data-ul="${k}"]`)) if (+el.value !== UL[k]) el.value = UL[k];
+  for (const el of document.querySelectorAll(`[data-ul-v="${k}"]`)) el.textContent = `${UL[k]} ${UL_SLIDERS[k][1]}`;
+  for (const el of document.querySelectorAll('[data-ul-at]')) el.textContent = ulSay();
+  param('ul' + k, UL[k]);
+}
+document.addEventListener('input', e => { if (e.target.dataset?.ul) setUl(e.target.dataset.ul, e.target.value); });
+document.addEventListener('dblclick', e => { const k = e.target.dataset?.ul; if (k) setUl(k, UL_DEF[k]); });
+const ulHTML = (k, i) => {
+  const [name, unit, min, max, step] = UL_SLIDERS[k];
+  return `<label class="pick"><span class="muted">${i ? '' : 'underline'}</span><span class="ch"><span class="muted">${name}</span><input type="range" data-ul="${k}" min="${min}" max="${max}" step="${step}" value="${UL[k]}" style="--d:${(UL_DEF[k] - min) / (max - min)}" aria-label="Underline ${name}" title="Double-click for ${UL_DEF[k]} ${unit}"><output class="num" data-ul-v="${k}">${UL[k]} ${unit}</output></span></label>`;
+};
+// The mark on a dropdown and on "n more", to try. arrow: ↓ / ↑, as before. chevron:
+// a drawn hairline chevron, quieter. caret: a small solid triangle. plus: + / − for
+// "more", a chevron on dropdowns. corner: a dog-ear in the dropdown's bottom corner,
+// a small one after "more", as a toolbar's tool that hides more. none: no mark; the
+// box says dropdown, and "more" is underlined, as a link. quiet: the user's pick, no
+// mark on dropdowns, a chevron on "more".
+const MK = ['arrow', 'chevron', 'caret', 'plus', 'corner', 'none', 'quiet'];
+const PICKS = [['box', 'gt', GT], ['dropdown', 'dd', DD], ['options', 'opts', OPTS], ['buttons', 'chip', CHIPS], ['header', 'hd', HD], ['marks', 'mk', MK]];
+const coarse = matchMedia('(pointer: coarse)');
+const place = () => ui.opts === 'pointer' ? (coarse.matches ? 'below' : 'value')
+  : ui.opts === 'hybrid' || ui.opts === 'glide' ? (coarse.matches ? 'below' : ui.opts) : ui.opts;
+
+// Options fold away (grid rows 0fr to 1fr, which every browser animates): a
+// switched group's while it's off, and every group's extra ones until "more".
+function groupHTML(g) {
+  const m = g.master && CONTROLS[g.master];
+  const rows = cs => cs.filter(c => c.k !== g.master).map(c => rowHTML(c)).join('');
+  // Built in the state they'll show, so nothing folds shut on load.
+  const fold = (attr, html, open) => `<div class="fold${open ? '' : ' shut'}" ${attr}><div class="fold-in">${html}</div></div>`;
+  const body = rows(g.controls.filter(c => !c.adv))
+    + fold(`data-extra="${g.id}"`, rows(g.controls.filter(c => c.adv)), ui.open.has(g.id))
+    + `<p class="gnote" data-note="${g.id}" hidden></p><button class="more hl" data-more="${g.id}"></button>`;
+  if (!m) return `<section class="group" data-g="${g.id}" aria-labelledby="g-${g.id}"><h2 id="g-${g.id}">${g.label}</h2><div class="rows">${body}</div></section>`;
+  const on = state[m.k], gt = ui.gt;
+  const about = `<span class="about">${g.about}</span>`;
+  // The title always toggles; in gutter and edge it carries the box.
+  const title = `<button class="gt-title${gt === 'gutter' || gt === 'edge' ? ' boxed' : ''}" data-master="${m.k}" aria-pressed="${on}" title="${m.label}">${g.label}</button>`;
+  const head = {
+    gutter: fold(`data-about="${g.id}"`, `<p class="row about-row">${about}</p>`, !on),
+    edge: fold(`data-about="${g.id}"`, `<p class="row about-row">${about}</p>`, !on),
+    start: `<label class="row master-start"><input type="checkbox" id="in-${m.k}" data-k="${m.k}" ${on ? 'checked' : ''} aria-label="${m.label}">${about}</label>`,
+    switch: `<div class="row master-switch"><span class="onoff"><button class="hl" data-set-k="${m.k}" data-set-v="0">off</button><span class="muted">/</span><button class="hl" data-set-k="${m.k}" data-set-v="1">on</button></span>${about}</div>`,
+    cell: `<div class="row"><button class="master-cell" data-master="${m.k}" aria-pressed="${on}">${about}<span class="sq" aria-hidden="true"></span></button></div>`,
+  }[gt];
+  return `<section class="group switched" data-g="${g.id}" aria-labelledby="g-${g.id}"><h2 id="g-${g.id}">${title}</h2><div class="rows">${head}${fold(`data-body="${g.id}"`, body, on)}</div></section>`;
 }
 
 function buildPanel() {
-  document.querySelector('.groups').innerHTML = GROUPS.map(g => `<section class="group" data-g="${g.id}" aria-labelledby="g-${g.id}"><h2 id="g-${g.id}">${g.label}</h2><div class="rows">${g.controls.map(rowHTML).join('')}<p class="gnote" data-note="${g.id}" hidden></p><button class="more hl" data-more="${g.id}"></button></div></section>`).join('')
-    + '<div class="foot"><button class="hl" data-reset-all>reset all ↺</button></div>';
+  document.querySelector('.groups').innerHTML = GROUPS.map(groupHTML).join('')
+    + `<div class="foot">${PICKS.map(([name, attr, list]) => `<span class="pick"><span class="muted">${name}</span><span class="ch">${list.map(t => `<button class="hl" data-${attr}="${t}">${t}</button>`).join('<span class="muted">/</span>')}</span></span>`).join('')}${Object.keys(UL_SLIDERS).map(ulHTML).join('')}<span class="pick"><span></span><span class="ch muted num" data-ul-at>${ulSay()}</span></span><button class="hl" data-reset-all>reset all ↺</button></div>`;
   document.querySelector('.tabs').innerHTML = GROUPS.map(g => `<button role="tab" data-tab="${g.id}" aria-selected="false">${g.label}</button>`).join('');
 }
 
@@ -304,7 +433,7 @@ function refresh() {
   for (const c of Object.values(CONTROLS)) {
     const row = document.querySelector(`[data-row="${c.k}"]`);
     if (!row) continue;
-    row.hidden = (c.adv && !ui.open.has(c.g)) || (c.show && !c.show()) || (c.of && ui.linked[c.of]);
+    row.hidden = (c.show && !c.show()) || (c.of && ui.linked[c.of]);
     // Split, a pair keeps its row as the heading of its two sides, so nothing moves.
     if (c.pair) row.classList.toggle('split', !ui.linked[c.k]);
     if (c.auto) row.classList.toggle('is-auto', ui.auto);
@@ -315,7 +444,14 @@ function refresh() {
     const extra = g.controls.filter(c => c.adv && c.type !== 'note' && !(c.show && !c.show()));
     const touched = extra.filter(c => changed(c.k)).length;
     more.hidden = !extra.length;
-    more.textContent = ui.open.has(g.id) ? 'fewer ↑' : `${extra.length} more ↓${touched ? ` · ${touched} set` : ''}`;
+    more.setAttribute('aria-expanded', ui.open.has(g.id));
+    document.querySelector(`[data-extra="${g.id}"]`).classList.toggle('shut', !ui.open.has(g.id));
+    if (g.master) document.querySelector(`[data-body="${g.id}"]`).classList.toggle('shut', !state[g.master]);
+    document.querySelector(`[data-about="${g.id}"]`)?.classList.toggle('shut', !!state[g.master]);
+    // The mark (MK) turns over as the group opens; CSS draws it.
+    const words = ui.open.has(g.id) ? 'fewer' : `${extra.length} more`;
+    const label = `${words} <span class="mk" aria-hidden="true"></span>${!ui.open.has(g.id) && touched ? ` · ${touched} set` : ''}`;
+    if (more.innerHTML !== label) more.innerHTML = label;
     const n = document.querySelector(`[data-note="${g.id}"]`);
     const html = NOTES[g.id]?.() ?? '';
     n.hidden = !html;
@@ -324,7 +460,19 @@ function refresh() {
   for (const b of document.querySelectorAll('[data-auto]')) b.setAttribute('aria-pressed', ui.auto);
   for (const b of document.querySelectorAll('[data-compare]')) b.setAttribute('aria-pressed', ui.compare);
   for (const b of document.querySelectorAll('[data-focus]')) b.setAttribute('aria-pressed', ui.focus);
-  for (const b of document.querySelectorAll('[data-peek]')) b.setAttribute('aria-pressed', b.dataset.peek === ui.vs);
+  for (const b of document.querySelectorAll('[data-master]')) b.setAttribute('aria-pressed', state[b.dataset.master]);
+  for (const b of document.querySelectorAll('[data-set-k]')) b.setAttribute('aria-pressed', state[b.dataset.setK] === (b.dataset.setV === '1'));
+  for (const [, k] of PICKS) {
+    root.dataset[k] = ui[k];
+    for (const b of document.querySelectorAll(`button[data-${k}]`)) b.setAttribute('aria-pressed', b.dataset[k] === ui[k]);
+  }
+  if (root.dataset.place !== place()) {
+    root.dataset.place = place();
+    paint('indent');
+    paint('indentPct');
+  }
+  for (const b of document.querySelectorAll('[data-unit]')) b.setAttribute('aria-pressed', b.dataset.unit === ui.unit);
+  for (const b of document.querySelectorAll('[data-vs]')) b.setAttribute('aria-pressed', b.dataset.vs === ui.vs);
   for (const b of document.querySelectorAll('[data-linked]')) b.setAttribute('aria-pressed', ui.linked[b.dataset.linked]);
   for (const b of document.querySelectorAll('[data-layout-set]')) b.setAttribute('aria-pressed', b.dataset.layoutSet === ui.layout);
 }
@@ -366,8 +514,9 @@ document.addEventListener('click', e => {
       state[key] = state[b];
       paint(key);
     }
-    ui.linked[key] = on;
-    apply();
+    // Glide: splitting, the number fades first (CSS) and linked slides into its room
+    // after it; joining, linked slides back at once and the number follows (CSS).
+    slide(ui.opts === 'glide' && t, () => { ui.linked[key] = on; apply(); }, on ? 0 : NUMBER_OUT);
   }
   else if ('auto' in d) {
     if (ui.auto) state.measure = measureNow;
@@ -380,6 +529,30 @@ document.addEventListener('click', e => {
   }
   else if ('try' in d) set('sample', d.try);
   else if ('compare' in d) { ui.compare = !ui.compare; apply(); }
+  else if ('vs' in d) { ui.vs = d.vs; apply(); }
+  else if ('master' in d) set(d.master, !state[d.master]);
+  else if ('setK' in d) set(d.setK, d.setV === '1');
+  else if (PICKS.some(([, k]) => k in d)) {
+    const [, k] = PICKS.find(([, k]) => k in d);
+    ui[k] = d[k];
+    param(k, d[k]);
+    // The box looks each have their own markup, so the panel is rebuilt where it is.
+    if (k === 'gt') {
+      const panel = document.querySelector('.panel'), y = panel.scrollTop;
+      buildPanel();
+      panel.scrollTop = y;
+    }
+    refresh();
+  }
+  else if ('unit' in d && d.unit !== ui.unit) {
+    // Switching keeps the indent where it is on the page.
+    if (d.unit === '%') state.indentPct = snap(CONTROLS.indentPct, Math.min(state.indent, indentCap) / measureNow * 100);
+    else state.indent = Math.min(Math.round(state.indentPct / 100 * measureNow), indentCap);
+    ui.unit = d.unit;
+    paint('indent');
+    paint('indentPct');
+    apply();
+  }
   else if ('read' in d) { ui.read = !ui.read; apply(); }
   else if ('focus' in d) { ui.focus = !ui.focus; apply(); }
   else if ('layoutSet' in d) setLayout(d.layoutSet);
@@ -389,34 +562,25 @@ document.addEventListener('click', e => {
     for (const g of document.querySelectorAll('.group')) g.classList.toggle('on', open && g.dataset.g === d.tab);
   }
 });
-/* Hold ragged or justified: the browser's own text takes your column's place
-   until you let go. Pressing also picks what side by side compares against.
-   Space or Enter on the button holds it from the keyboard. */
-function peek(b, start) {
-  ui.vs = b.dataset.peek;
-  ui.peek = start && !ui.compare ? ui.vs : null;
-  apply();
+// Moves an element from where it is on screen to where a change puts it: measure,
+// change, measure, then play the difference back to nothing. Measuring where it is
+// now, mid-slide too, lets a second click turn it around instead of jumping.
+// NUMBER_OUT matches the number's fade in proto.css (.row.split > .out).
+const NUMBER_OUT = 100;
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+function slide(el, change, delay = 0) {
+  const from = el && el.getBoundingClientRect();
+  for (const a of el ? el.getAnimations() : []) if (a.id === 'slide') a.cancel();
+  change();
+  if (!el || still.matches) return;
+  const to = el.getBoundingClientRect(), dx = from.left - to.left, dy = from.top - to.top;
+  if (!dx && !dy) return;
+  // Held where it was through the delay (fill: backwards), then off it goes.
+  el.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0 0' }], { id: 'slide', duration: 340, delay, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'backwards' });
 }
-document.addEventListener('pointerdown', e => {
-  const b = e.target.closest('[data-peek]');
-  if (!b || e.button > 0) return;
-  e.preventDefault();
-  b.setPointerCapture(e.pointerId);
-  peek(b, true);
-  const end = () => peek(b, false);
-  b.addEventListener('pointerup', end, { once: true });
-  b.addEventListener('pointercancel', end, { once: true });
-});
+
 document.addEventListener('keydown', e => {
-  const b = e.target.closest?.('[data-peek]');
-  if (b && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); if (!e.repeat) peek(b, true); }
-});
-document.addEventListener('keyup', e => {
-  const b = e.target.closest?.('[data-peek]');
-  if (b && (e.key === ' ' || e.key === 'Enter')) peek(b, false);
-});
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || !(ui.read || ui.focus)) return;
+  if (e.key !== 'Escape' || !(ui.read || ui.focus) || e.target.matches?.('[data-name]')) return;
   if (ui.read) ui.read = false; else ui.focus = false;
   apply();
 });
@@ -425,7 +589,7 @@ document.addEventListener('keydown', e => {
    Canvas. The unjustified column comes first; comparing adds the browser's
    column to its right, so the text you're looking at never moves.
    --------------------------------------------------------------------------- */
-const colHTML = (col, name) => `<section class="col" data-col="${col}"><div class="col-head"><span data-name="${col}">${name}</span><span class="m num"><span data-m="${col}.lines">–</span> ln · Σ <span data-m="${col}.dev">–</span> · short <span data-m="${col}.short">–</span></span></div><div class="ruler" aria-hidden="true"><span class="w num" data-m="width"></span></div><div class="frame"><div class="text" data-col="${col}" contenteditable="true" spellcheck="false"></div><div class="handle" title="Drag to set the width. Double-click for auto."><span>↔</span></div></div></section>`;
+const colHTML = (col, name) => `<section class="col" data-col="${col}"><div class="col-head"><span data-name="${col}">${name}</span><span class="m num"><span data-m="${col}.lines">–</span> ln · Σ <span data-m="${col}.dev">–</span> · short <span data-m="${col}.short">–</span></span></div><div class="ruler" aria-hidden="true"></div><div class="frame"><div class="text" data-col="${col}" contenteditable="true" spellcheck="false"></div><div class="handle" title="Drag to set the width. Double-click for auto."><span>↔</span></div></div></section>`;
 
 const readingsHTML = () => `<dl class="readings num">${[['Lines', 'lines'], ['Σ', 'dev'], ['Short', 'short'], ['Width', 'width']].map(([l, m]) => `<dt>${l}</dt><dd data-m="u.${m}">–</dd>`).join('')}</dl>`;
 
@@ -434,6 +598,7 @@ const plainHTML = () => paragraphs.map(p => `<p>${p ? esc(p) : '<br>'}</p>`).joi
 
 function loadSample() {
   paragraphs = SAMPLES[state.sample].split('\n\n');
+  ui.caption = null;
   for (const el of texts()) el.innerHTML = plainHTML();
   uHasTw = false;
 }
@@ -490,12 +655,18 @@ function status() {
   const label = ui.compare ? 'Unjustified' : {
     Spec: `${+state.size.toFixed(2)}/${+(state.size * state.lh).toFixed(2)} rem ${state.typeface}`,
     Block: `${measureNow} ch × ${lines} ln`,
-    Figure: `Fig. 1 · ${state.sample}`,
+    Figure: ui.caption ?? `Fig. 1 · ${state.sample}`,
     Sample: state.sample,
     None: '',
   }[state.label];
-  for (const el of document.querySelectorAll('[data-name="u"]')) el.textContent = label;
-  for (const el of document.querySelectorAll('[data-name="b"]')) el.textContent = `Browser · ${ui.peek ?? ui.vs}`;
+  // The figure caption is yours to write, like the text. Left alone while you type.
+  const own = !ui.compare && state.label === 'Figure';
+  for (const el of document.querySelectorAll('[data-name="u"]')) {
+    el.contentEditable = own ? 'plaintext-only' : 'false';
+    el.title = own ? 'Click to write your own caption' : '';
+    if (el !== document.activeElement && el.textContent !== label) el.textContent = label;
+  }
+  for (const el of document.querySelectorAll('[data-name="b"]')) el.textContent = `Native browser · ${ui.vs}`;
 }
 
 /* ---------------------------------------------------------------------------
@@ -569,6 +740,23 @@ document.addEventListener('compositionend', e => {
    line. With blank lines, each block is a paragraph and its single breaks become
    spaces; without, each line is one. A single line keeps the browser's own insert,
    and its undo. */
+// One line: Enter or Esc finishes it, pasted line breaks become spaces, and an
+// emptied caption goes back to the sample's.
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (!el.matches?.('[data-name="u"]')) return;
+  if (el.textContent.includes('\n')) el.textContent = el.textContent.replace(/\s*\n\s*/g, ' ');
+  ui.caption = el.textContent;
+});
+document.addEventListener('keydown', e => {
+  if (e.target.matches?.('[data-name="u"]') && (e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); e.target.blur(); }
+});
+document.addEventListener('focusout', e => {
+  if (!e.target.matches?.('[data-name="u"]')) return;
+  if (!e.target.textContent.trim()) ui.caption = null;
+  status();
+});
+
 document.addEventListener('paste', e => {
   const t = e.target.closest?.('.text');
   if (!t) return;
@@ -767,16 +955,26 @@ document.addEventListener('dblclick', e => {
 
 const LAYOUTS = { left: 'Left', centre: 'Centred', gutter: 'Gutter', wide: 'Wide panel' };
 // The header switches left and centre in place; the URL follows, so a reload keeps it.
+function param(k, v) {
+  const q = new URLSearchParams(location.search);
+  q.set(k, v);
+  history.replaceState(null, '', '?' + q);
+}
 function setLayout(layout) {
   ui.layout = layout;
   root.dataset.layout = layout;
-  history.replaceState(null, '', `?layout=${layout}`);
+  param('layout', layout);
   document.title = `${LAYOUTS[layout]} · round 3 — unjustified lab`;
   apply();
 }
 export function start() {
   const asked = new URLSearchParams(location.search).get('layout');
   ui.layout = asked in LAYOUTS ? asked : 'left';
+  const q = new URLSearchParams(location.search);
+  for (const [, k, list] of PICKS) if (list.includes(q.get(k))) ui[k] = q.get(k);
+  for (const k in UL) if (Number.isFinite(parseFloat(q.get('ul' + k)))) UL[k] = parseFloat(q.get('ul' + k));
+  ulApply();
+  coarse.addEventListener('change', refresh);
   root.dataset.layout = ui.layout;
   document.title = `${LAYOUTS[ui.layout]} · round 3 — unjustified lab`;
   document.querySelector('.stage').innerHTML = readingsHTML() + `<div class="pair">${colHTML('u', 'Unjustified')}${colHTML('b', 'Browser')}</div>`;

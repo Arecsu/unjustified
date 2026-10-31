@@ -1,8 +1,8 @@
 # Handoff
 
-State as of 2026-10-30. Nothing below is committed yet.
+State as of 2026-10-31. Round 3's refinements are committed on `lab-prototypes`; nothing is pushed.
 
-## Uncommitted work
+## Earlier work
 
 1. **Font sizes** (`src/styles/*.css`, 6 files): every size under 15px was raised
    (5–7→11, 8→12, 9–10→13, 11–12→14, 13–14→15px). The sidebar is wider: 17rem default,
@@ -123,23 +123,82 @@ gutter), wide (two-column panel on wide screens). Built from the user's notes:
   (`RATIO`, `ui.ratio`); word spacing's shrink stays at −20% unless split (user's call). Word spacing defaults −20% / +200% (the user's suggestion for stretch;
   shrink "much less"). Split, the pair's row stays as a heading (label and
   `linked` never move) over two indented rows, Shrink and Stretch. `auto` and `linked` are
-  strike toggles from specimen T-04, with no hover block.
-- Header: `left / centre` (gutter and wide stay reachable by URL), `hold ragged / justified`,
-  `side by side / focus / read`. Holding ragged or justified (pointer, touch, or Space)
-  shows the browser's text in place of yours until release; the last one pressed is what
-  side by side compares against. Replaced `compare` and Show's "Justify browser".
+  strike toggles from specimen T-04, with no hover block. The user found they read as
+  part of the label: four looks to try for auto and linked (not the unit), `?chip=` or the panel foot's `buttons`: plain,
+  underline (default; S-11, as ch / %, plus T-04's strike when off), outline (boxed and struck when off), fill (boxed,
+  black when on). Where the option sits is a second choice, `?opts=` or `options`
+  (OPTS, `place()`, `data-place` on the root): label (with room above the slider: the
+  underline sat on it), value (beside the number; ch / % becomes its unit), below (a
+  line under the slider, as Hyphens' start), pointer (value for
+  `pointer: fine`, below for `pointer: coarse`), hybrid (the user's mix: auto and linked
+  beside the label, ch / % beside the number, label spacing on every slider), glide
+  (default; hybrid, and linked slides to the row's end as a pair splits). The state
+  changes at once; the sequence is timing only. `slide()` measures linked on screen,
+  applies the change, measures again and plays `translate` back to zero, so a second
+  click mid-slide turns it around. Splitting, the number fades out first (CSS, .1s) and
+  the slide waits that long (`NUMBER_OUT`, held by `fill: backwards`); joining, the slide
+  starts at once and the number fades back in after .3s (CSS delay), so they never meet. Hybrid and glide
+  use below on coarse pointers. Each row writes the option in all three
+  slots and CSS shows one. Coarse pointers also get taller sliders and thumbs.
+- Header: `left / centre` (gutter and wide stay reachable by URL), then
+  `vs browser / focus / read` (first named side by side). Vs browser shows `native browser → ragged / justified`
+  just left of it, a plain click choice of which browser text sits beside yours. The user
+  first had it as hold-to-show (the browser's text in place of yours while held) and
+  regretted it: unclear what it was about, and useless without the browser column.
   Focus only fades (opacity), never moves layout.
+- Hyphens and Kashida have a master switch (`master` on the group): while off, the group
+  shows only the switch, its options folded away. Folds (`.fold`, grid rows 0fr→1fr, which
+  Safari and Firefox animate, unlike `height: auto`) also run "n more". The user
+  picked a bare box over a row, a struck title and the site's button, then rejected
+  leader (too many lines) and end (box too far from the title). Five looks to try,
+  `?gt=` or the panel foot's `box`, each with its own markup (changing it rebuilds the
+  panel): gutter, edge, start (default; the user's favourite), switch (off / on),
+  cell (round 1 C). Off, the
+  empty line says what the group does (`about` on the group). The title toggles in all.
+  Titles sit at a fixed top offset (`align-items: start`, padding a row's), not on the
+  first row's baseline, which moved them when a group opened.
+- The panel foot's pickers are one table, `PICKS` ([name, ui key, choices]); the key is
+  also the URL parameter and the root's data attribute, and refresh, clicks and start
+  read it. Adding a look to try is a line there and its CSS. Below them, underline sliders
+  (`UL`, `?ulat13=` `?ulat16=` `?ulw=`). The offset is one equation through two points
+  the user picks, the gap under 13px words (panel) and under 16px (header), run on each
+  word's own size like fluid type runs on the viewport:
+  `clamp(max(1px, .05em), calc(at13 + (1em - 13px) * (at16 - at13) / 3), .5em)`.
+  The user wanted the header's underlines closer than the panel's: a px floor
+  (martyrio's `max(2px, .13em)`) or an em share only ever grows with size. Thickness
+  is `--ul-w` in em (default .1em, the user's pick). Default 3px at 13, 2px at 16.
+- Header looks, `?hd=` or `header`: block (default, as before), stops (S-11: chosen in ink
+  and underlined, the rest at half ink), idle (stops, but a row with nothing on, vs
+  browser / focus / read, stays in ink until one is on).
+- Marks on dropdowns and "n more" (`.mk`, drawn by CSS), `?mk=` or `marks`: arrow (as
+  before), chevron, caret, plus, corner, none, quiet (default, the user's pick: none on
+  dropdowns, chevron on "more"). The user found ↓ repetitive.
+  The mark turns over (`aria-expanded`) as "more" opens.
+- Dropdowns are drawn (`.dd`: title, value, ↓) with the real select laid over them at
+  opacity 0, so the native menu (and the phone's picker) still opens and the value updates
+  through `paint()`'s `data-v`. Six looks, `?dd=` or the panel foot's `dropdown`: stack (as
+  before), inline (default; title left, value right, one box), caption, legend (title in
+  the top border), split (title cell ruled off), rule (no box, underline, black on hover).
+  One-line looks start their row higher so the words sit on the group title's line.
+  Double-click no longer resets a dropdown: the select takes every click.
+- Group titles share the row labels' size and settings (TYPE and Typeface, same cap
+  height), with a 6.25rem gutter (room for the box beside HYPHENS), a 1.5rem gap, and more space between rows.
 - Kashida group, modelled on Hyphens. The letter classes are the app's ranking in
   `src/kashida.ts`, each switchable. The user's Arabic contact asked for "more options,
   like what characters to use"; reading that as which letters stretch is a guess, to confirm.
-- Indent (broken paragraphs), size up to 4.5 rem, line height. Faint paragraph
+- Indent in ch or % of the width (`indent` / `indentPct`, one row shown per `ui.unit`,
+  a `ch / %` switch converting on the spot, styled exactly as specimen S-11 word
+  stops: chosen in ink with a 1.5px underline, the other at 52% ink, the slash at 20%). Shown at most 90% of the width (`indentCap`);
+  the number is kept, greyed while held in, and comes back when the width does (it used
+  to overflow, then to be overwritten). Indent (broken paragraphs), size up to 4.5 rem, line height. Faint paragraph
   numbers `01` (no brackets, no line count), no crop marks, a
   faint width handle that darkens on hover or drag.
-- Show › Ruler: Hairline (default), Dimension, Ticks, None. Each but None marks the rag
+- Show › Ruler: Hairline (default), Ticks, None (Dimension removed). Each but None marks the rag
   zone at the line's end as the same 1px line turning dashed (a thick bar, then a grey tail, read as a glitch). The old pixel ruler took too much attention.
-- Alone, the column head's label is a Show › Label choice: Spec `19/29.5 SOURCE SERIF 4`
-  (default), Block `684 × 342 PX`, Figure `FIG. 1 · EDITORIAL`, Sample, None. Comparing,
-  UNJUSTIFIED / BROWSER. The header already says unjustified.
+- Alone, the column head's label is a Show › Label choice: Figure `FIG. 1 · EDITORIAL`
+  (default; editable like the text, one line, `ui.caption`, reset by a new sample or by
+  emptying it), Spec `19/29.5 SOURCE SERIF 4`, Block `684 × 342 PX`, Sample, None. Comparing,
+  UNJUSTIFIED / NATIVE BROWSER · RAGGED. The header already says unjustified.
 - Status bar: left counts (¶, words, characters); right only what's shown nowhere else
   (≈ characters a line, minutes to read, tatweels). The user didn't want it to repeat the label.
 - The canvas is balanced like an app: the block is centred vertically by JS (`centre()`),
