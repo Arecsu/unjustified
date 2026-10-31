@@ -157,7 +157,34 @@ gutter), wide (two-column panel on wide screens). Built from the user's notes:
   empty line says what the group does (`about` on the group). The title toggles in all.
   Titles sit at a fixed top offset (`align-items: start`, padding a row's), not on the
   first row's baseline, which moved them when a group opened.
-- The panel foot's pickers are one table, `PICKS` ([name, ui key, choices]); the key is
+- The panel is one grid, `.groups`: a gutter column as wide as its longest title
+  (`max-content`) and the options column; every group takes both through `subgrid`, so
+  the titles always line up and a box beside a title widens every group at once. The
+  right edge gets the page's `--margin`. Phones and the wide layout's two columns fall
+  back to a fixed gutter.
+- Variants also has `rules` (line / dashed (default) / off: the hairlines between groups;
+  dashed is drawn with the rag zone's 3px dash; the line keeps its width in each, so
+  nothing moves).
+- VARIANTS and TUNING live in a floating window (`.win`, `buildWin()`), not the panel:
+  dragged by its bar, resized from its corner (`resize: both`), shown and hidden with
+  ⌥T (`e.code === 'KeyT'`, so any keyboard layout) or "variants" at the panel's foot.
+  Position, size and open are kept in localStorage (`unjustified-r3-win`). Hidden in
+  read mode. "copy changes" in its bar copies every pick and slider that differs
+  from its default (`PICK_DEF`, `TUNES[k][5]`) as plain lines, plus the address, for the
+  user to paste back.
+- TUNING holds every slider, from one
+  table, `TUNES` ([label, unit, min, max, step, default, CSS variable]; the key is the
+  URL parameter): the underline's three, then every spacing in the panel. Defaults are
+  the user's tuning (pasted back on 2026-10-31): between groups `--gg` 2.55rem, between
+  rows `--rg` 1rem (row padding halves; the titles and the one-line dropdowns follow
+  it), label to slider `--lt` .4rem, title to options `--cg` 2.1rem, panel sides `--ps`
+  1.65rem, top `--pt` 1.25rem, above "more" `--mm` 1.25rem, label to its option `--og`
+  .55rem, after a split pair `--pr` .7rem, split rows' indent `--si` 1.3rem, dropdown
+  padding `--ddp` .65em. Each CSS rule reads its variable with that default as the
+  fallback.
+- The looks to try are a group of their own, VARIANTS, each a row with its name over its
+  choices.
+- The pickers are one table, `PICKS` ([name, ui key, choices]); the key is
   also the URL parameter and the root's data attribute, and refresh, clicks and start
   read it. Adding a look to try is a line there and its CSS. Below them, underline sliders
   (`UL`, `?ulat13=` `?ulat16=` `?ulw=`). The offset is one equation through two points
@@ -166,9 +193,10 @@ gutter), wide (two-column panel on wide screens). Built from the user's notes:
   `clamp(max(1px, .05em), calc(at13 + (1em - 13px) * (at16 - at13) / 3), .5em)`.
   The user wanted the header's underlines closer than the panel's: a px floor
   (martyrio's `max(2px, .13em)`) or an em share only ever grows with size. Thickness
-  is `--ul-w` in em (default .1em, the user's pick). Default 3px at 13, 2px at 16.
-- Header looks, `?hd=` or `header`: block (default, as before), stops (S-11: chosen in ink
-  and underlined, the rest at half ink), idle (stops, but a row with nothing on, vs
+  is `--ul-w` in em (default .1em, the user's pick). Default 3px at 13, 5px at 16 (the
+  user's pick).
+- Header looks, `?hd=` or `header`: block (as before), stops (default; S-11: chosen in
+  ink and underlined, the rest at half ink), idle (stops, but a row with nothing on, vs
   browser / focus / read, stays in ink until one is on).
 - Marks on dropdowns and "n more" (`.mk`, drawn by CSS), `?mk=` or `marks`: arrow (as
   before), chevron, caret, plus, corner, none, quiet (default, the user's pick: none on

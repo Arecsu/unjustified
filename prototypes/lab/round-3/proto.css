@@ -79,7 +79,7 @@ a { color: inherit; text-decoration: none; }
   color: color-mix(in srgb, var(--fg) 52%, transparent);
   background: none;
   text-decoration: underline transparent var(--ul-w, .1em);
-  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto;
+  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto;
   transition: color .12s, text-decoration-color .12s;
 }
 :is([data-hd='stops'], [data-hd='idle']) .modes .hl[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
@@ -143,17 +143,33 @@ main { overflow-y: auto; min-width: 0; }
   overscroll-behavior-y: contain;
   font-size: .9375rem;
 }
-.groups { padding: 1.25rem 1.25rem 3rem; }
+/* One gutter for every group, as wide as the longest title (subgrid), so the
+   titles line up and nothing else sets it. */
+.groups {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--cg, 2.1rem);
+  padding: var(--pt, 1.25rem) var(--ps, 1.65rem) 3rem;
+}
 .tabs { display: none; }
 .group {
   display: grid;
-  grid-template-columns: 6.25rem minmax(0, 1fr);
-  column-gap: 1.5rem;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: start;
-  padding-block: 1.1rem 1.25rem;
+  /* The gap between groups (a Variants slider), half above, half below. */
+  padding-block: calc(var(--gg, 2.55rem) / 2);
   border-top: var(--hair);
 }
 .group:first-child { border-top: 0; padding-top: 0; }
+/* Rules (Variants): line, dashed or off. The line keeps its width in every look, so
+   switching never moves anything. Dashed is drawn in the line's place with the rag
+   zone's 3px dash, more even than a dashed border; off leaves the gap alone. */
+[data-rules='dashed'] :is(.group, .foot), [data-rules='off'] :is(.group, .foot) { border-color: transparent; }
+[data-rules='dashed'] :is(.group:not(:first-child), .foot) {
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--fg) 35%, transparent) 0 3px, transparent 3px 6px) top / 100% 1px no-repeat border-box;
+}
+[data-layout='wide'][data-rules='dashed'] :is(.group, .foot) { background-position: bottom; }
 /* The same size and settings as the row label beside it, so TYPE and Typeface
    share a cap height. Set off the top by a row's padding, not aligned to the
    first row's baseline, so it stays put whatever its group shows or folds. */
@@ -162,7 +178,7 @@ main { overflow-y: auto; min-width: 0; }
   text-transform: uppercase;
   text-align: right;
   margin: 0;
-  padding-top: .5rem;
+  padding-top: calc(var(--rg, 1rem) / 2);
 }
 .rows { min-width: 0; display: flex; flex-direction: column; }
 
@@ -171,10 +187,10 @@ main { overflow-y: auto; min-width: 0; }
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: baseline;
   column-gap: .75rem;
-  padding: .5rem 0;
+  padding: calc(var(--rg, 1rem) / 2) 0;
 }
 .row > input[type='range'] { grid-column: 1 / -1; }
-.row .lbl { display: flex; gap: .5rem; align-items: baseline; min-width: 0; white-space: nowrap; }
+.row .lbl { display: flex; gap: var(--og, .55rem); align-items: baseline; min-width: 0; white-space: nowrap; }
 .row .out { display: flex; gap: .5rem; align-items: baseline; }
 .row.toggle { align-items: center; cursor: pointer; }
 .row.dim > * { opacity: .4; }
@@ -185,10 +201,10 @@ main { overflow-y: auto; min-width: 0; }
 .row.is-auto output, .row.is-capped output { color: var(--fg-2); }
 .row.is-auto input[type='range']::-webkit-slider-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
 .row.is-auto input[type='range']::-moz-range-thumb { background: var(--bg); box-shadow: inset 0 0 0 1px var(--fg); }
-.row.sub .lbl { padding-inline-start: 1rem; }
+.row.sub .lbl { padding-inline-start: var(--si, 1.3rem); }
 /* A split pair reads as one group, its heading over Shrink and Stretch: room after
    it before the next slider or "more". */
-.row.sub:not([hidden]) + :is(.row:not(.sub), .fold) { margin-top: .9rem; }
+.row.sub:not([hidden]) + :is(.row:not(.sub), .fold) { margin-top: var(--pr, .7rem); }
 .row.note .sub { font-size: .8125rem; text-transform: uppercase; color: var(--fg-2); padding-top: .4rem; }
 .row .ar { font-size: 1.05em; letter-spacing: .12em; }
 .opt { font-size: .8125rem; color: var(--fg-2); }
@@ -222,14 +238,14 @@ main { overflow-y: auto; min-width: 0; }
 .unit button {
   color: color-mix(in srgb, var(--fg) 52%, transparent);
   text-decoration: underline transparent var(--ul-w, .1em);
-  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto;
+  text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto;
   transition: color .12s, text-decoration-color .12s;
 }
 .unit button[aria-pressed='true'] { color: var(--fg); text-decoration-color: var(--fg); }
 .unit .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
 /* Underline: specimen S-11, as ch / % — on in ink and underlined; off at half ink,
    struck through as T-04. */
-[data-chip='underline'] .opt.sk .base { color: color-mix(in srgb, var(--fg) 52%, transparent); text-decoration: underline transparent var(--ul-w, .1em); text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * -.3333), .5em)); text-decoration-skip-ink: auto; transition: color .12s, text-decoration-color .12s; }
+[data-chip='underline'] .opt.sk .base { color: color-mix(in srgb, var(--fg) 52%, transparent); text-decoration: underline transparent var(--ul-w, .1em); text-underline-offset: var(--ul, clamp(max(1px, .05em), calc(3px + (1em - 13px) * .6667), .5em)); text-decoration-skip-ink: auto; transition: color .12s, text-decoration-color .12s; }
 [data-chip='underline'] .opt.sk[aria-pressed='true'] .base { color: var(--fg); text-decoration-color: var(--fg); }
 
 /* Where a slider's option sits (OPTS in proto.js). Written in each place; one shows. */
@@ -237,11 +253,11 @@ main { overflow-y: auto; min-width: 0; }
 [data-place='label'] .at-label, [data-place='value'] .at-value { display: contents; }
 [data-place='below'] .at-below { display: block; grid-column: 1 / -1; }
 /* Beside the label: room between its underline and the slider. */
-[data-place='label'] .row.range:has(.at-label) > input[type='range'] { margin-top: .4rem; }
+[data-place='label'] .row.range:has(.at-label) > input[type='range'] { margin-top: var(--lt, .4rem); }
 /* Hybrid and glide: auto and linked beside the label, ch / % beside the number.
    Every slider gets the label's room, so the rows keep one rhythm. */
 :is([data-place='hybrid'], [data-place='glide']) :is(.at-label:not(.u), .at-value.u) { display: contents; }
-:is([data-place='hybrid'], [data-place='glide']) .row.range > input[type='range'] { margin-top: .4rem; }
+:is([data-place='hybrid'], [data-place='glide']) .row.range > input[type='range'] { margin-top: var(--lt, .4rem); }
 /* Glide: split, linked goes to the row's end, where the number was. The label and
    the number share the first line, so the number can stay put while it fades.
    Splitting, it leaves first (.1s, NUMBER_OUT in proto.js) and linked slides in
@@ -270,7 +286,7 @@ main { overflow-y: auto; min-width: 0; }
 [data-chip='fill'] .opt.sk .over { display: none; }
 [data-chip='fill'] .opt.sk[aria-pressed='true'] { background: var(--fg); }
 [data-chip='fill'] .opt.sk[aria-pressed='true'] .base { color: var(--bg); }
-.more { align-self: flex-start; font-size: .8125rem; color: var(--fg-2); margin-top: .4rem; }
+.more { align-self: flex-start; font-size: .8125rem; color: var(--fg-2); margin-top: var(--mm, 1.25rem); }
 
 /* The mark on dropdowns and "n more" (MK in proto.js). It turns over as "more" opens. */
 .mk { display: inline-block; flex-shrink: 0; transition: rotate .2s cubic-bezier(.2, .8, .2, 1); }
@@ -312,16 +328,72 @@ main { overflow-y: auto; min-width: 0; }
 .gnote button { color: var(--fg); }
 /* The prototype's pickers, one a line: the name, then its choices, which wrap
    under each other, not under the name. "reset all" closes the panel. */
-.foot { display: flex; flex-direction: column; gap: .5rem; padding-top: 1rem; border-top: var(--hair); font-size: .8125rem; }
-.pick { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); gap: .45rem; align-items: baseline; }
-.pick .ch { display: flex; flex-wrap: wrap; gap: .1rem .45rem; align-items: baseline; }
-/* The underlines, to try: every underline reads --ul (offset) and --ul-w (thickness). */
-.pick:has([data-ul]) { align-items: center; }
-.pick .ch:has([data-ul]) { flex-wrap: nowrap; align-items: center; gap: .75rem; }
-.pick .ch:has([data-ul]) > .muted { min-width: 4rem; }
-.pick [data-ul] { flex: 1; min-width: 0; }
-.pick [data-ul-v] { flex-shrink: 0; min-width: 5ch; text-align: end; }
-.foot [data-reset-all] { align-self: flex-end; margin-top: .5rem; }
+.foot { grid-column: 1 / -1; display: flex; justify-content: space-between; padding-block: 1rem 1.5rem; border-top: var(--hair); font-size: .8125rem; }
+/* The prototype's window (Variants and Tuning), floating over the page. A frame
+   and a bar as the site draws them: one rule, no shadow, no rounding. */
+.win {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  min-width: 18rem;
+  min-height: 8rem;
+  max-width: calc(100vw - 1rem);
+  max-height: calc(100dvh - 1rem);
+  background: var(--bg);
+  border: var(--rule);
+  font-size: .9375rem;
+  overflow: hidden;
+  resize: both;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.win-bar {
+  display: flex;
+  gap: .75rem;
+  align-items: baseline;
+  padding: .45rem .75rem;
+  border-bottom: var(--rule);
+  font-size: .8125rem;
+  text-transform: uppercase;
+  cursor: grab;
+  touch-action: none;
+}
+.win-bar:active { cursor: grabbing; }
+.win-bar > span:first-child { flex: 1; }
+.win-bar [data-copy] { text-transform: none; }
+.win-groups {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--cg, 2.1rem);
+  align-content: start;
+  padding: 1rem 1.25rem 1.5rem;
+}
+[data-read] .win { display: none; }
+
+/* Variants, the prototype's own group: each look's name over its choices. */
+.row.pick { display: block; }
+.row.pick .ch { display: flex; flex-wrap: wrap; gap: .15rem .5rem; align-items: baseline; margin-top: .35rem; }
+/* Its choices are specimen S-11's word stops: the chosen one in ink and underlined,
+   the rest at half ink, the slashes fainter still. No black block. */
+.row.pick .ch .hl {
+  padding: 0;
+  margin: 0;
+  background: none;
+  color: color-mix(in srgb, var(--fg) 52%, transparent);
+  text-decoration: underline transparent var(--ul-w, .1em);
+  text-underline-offset: var(--ul, 3px);
+  text-decoration-skip-ink: auto;
+  transition: color .12s, text-decoration-color .12s;
+}
+.row.pick .ch .hl[aria-pressed='true'] { background: none; color: var(--fg); text-decoration-color: var(--fg); }
+@media (hover: hover) and (pointer: fine) { .row.pick .ch .hl:hover { background: none; color: var(--fg); } }
+@media (pointer: coarse) { .row.pick .ch .hl:active { background: none; color: var(--fg); } }
+.row.pick .sl { color: color-mix(in srgb, var(--fg) 20%, transparent); }
+[data-ul-at] { margin-block: .5rem; }
 
 /* Folds: a switched group's options while it's off, a group's extra ones until
    "more". Grid rows from 0fr to 1fr animate in every browser, unlike height: auto. */
@@ -438,14 +510,14 @@ input[type='checkbox']:checked { background: var(--fg); }
 /* Stack: the title above a box, as before. Only the box opens it. */
 /* One-line looks: the row starts higher by the box's padding and border, so the
    words in it sit on the line a group's title does. */
-:is([data-dd='inline'], [data-dd='split']) .row.select { padding-top: calc(.5rem - .3em - 1px); }
-[data-dd='rule'] .row.select { padding-top: calc(.5rem - .3em); }
+:is([data-dd='inline'], [data-dd='split']) .row.select { padding-top: calc(var(--rg, 1rem) / 2 - var(--ddp, .65em) - 1px); }
+[data-dd='rule'] .row.select { padding-top: calc(var(--rg, 1rem) / 2 - var(--ddp, .65em)); }
 
 [data-dd='stack'] .dd-l { display: block; margin-bottom: .35rem; }
-[data-dd='stack'] .dd-box { position: relative; border: var(--rule); padding: .3em .5em .3em .45em; }
+[data-dd='stack'] .dd-box { position: relative; border: var(--rule); padding: var(--ddp, .65em) .5em var(--ddp, .65em) .45em; }
 /* Inline: one box, the title on the left as a slider's label, the value on the
    right where a slider's number is. */
-[data-dd='inline'] .dd { display: flex; align-items: baseline; gap: .75rem; border: var(--rule); padding: .3em .5em .3em .45em; }
+[data-dd='inline'] .dd { display: flex; align-items: baseline; gap: .75rem; border: var(--rule); padding: var(--ddp, .65em) .5em var(--ddp, .65em) .45em; }
 [data-dd='inline'] .dd-l { color: var(--fg-2); flex-shrink: 0; }
 [data-dd='inline'] .dd-box { flex: 1; min-width: 0; }
 [data-dd='inline'] .dd-v { text-align: end; }
@@ -459,11 +531,11 @@ input[type='checkbox']:checked { background: var(--fg); }
 [data-dd='legend'] .dd-l { position: absolute; top: 0; inset-inline-start: .35rem; translate: 0 -55%; padding: 0 .3rem; background: var(--bg); font-size: var(--tiny); text-transform: uppercase; color: var(--fg-2); line-height: 1; }
 /* Split: a cell for the title, ruled off from the value's, as a spec sheet's row. */
 [data-dd='split'] .dd { display: grid; grid-template-columns: 5.75rem minmax(0, 1fr); border: var(--rule); }
-[data-dd='split'] .dd-l { padding: .3em .5em .3em .45em; border-inline-end: var(--hair); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-[data-dd='split'] .dd-box { padding: .3em .5em .3em .5em; }
+[data-dd='split'] .dd-l { padding: var(--ddp, .65em) .5em var(--ddp, .65em) .45em; border-inline-end: var(--hair); color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-dd='split'] .dd-box { padding: var(--ddp, .65em) .5em; }
 /* Rule: no box. The row is the dropdown, a line under it, black on hover as the
    site's links. */
-[data-dd='rule'] .dd { display: flex; align-items: baseline; gap: .75rem; padding: .3em .2em; margin-inline: -.2em; border-bottom: var(--rule); }
+[data-dd='rule'] .dd { display: flex; align-items: baseline; gap: .75rem; padding: var(--ddp, .65em) .2em; margin-inline: -.2em; border-bottom: var(--rule); }
 [data-dd='rule'] .dd-box { flex: 1; min-width: 0; }
 [data-dd='rule'] .dd-v { text-align: end; }
 @media (hover: hover) and (pointer: fine) { [data-dd='rule'] .dd:hover { background: var(--fg); color: var(--bg); } }
@@ -641,7 +713,8 @@ input[type='checkbox']:checked { background: var(--fg); }
 /* The panel takes the spare width and lays its groups in two columns. */
 @media (min-width: 87.5em) {
   [data-layout='wide'] { --panel-w: 46rem; }
-  [data-layout='wide'] .groups { columns: 2; column-gap: 2rem; }
+  [data-layout='wide'] .groups { display: block; columns: 2; column-gap: 2rem; }
+  [data-layout='wide'] .group { grid-template-columns: 6.25rem minmax(0, 1fr); column-gap: 1.5rem; }
   /* Rules under each group, so neither column starts with one. */
   [data-layout='wide'] .group { break-inside: avoid; border-top: 0; border-bottom: var(--hair); padding-block: 0 1rem; margin-bottom: .85rem; }
   [data-layout='wide'] .foot { border-top: 0; padding-top: 0; }
@@ -724,6 +797,7 @@ input[type='checkbox']:checked { background: var(--fg); }
     background: var(--bg);
     border-top: var(--rule);
     padding: .75rem var(--margin) 1.25rem;
+    display: block;
   }
   .groups:not(:has(.group.on)) { display: none; }
   .group { display: none; grid-template-columns: minmax(0, 1fr); border: 0; padding: 0; }

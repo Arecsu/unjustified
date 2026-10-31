@@ -137,7 +137,7 @@ const DEFAULTS = { ...state };
 // A linked pair's slider sets its + side. Tracking's − side follows at this ratio,
 // symmetric; word spacing's shrink stays put (−20%) until split.
 const RATIO = { track: -1 };
-const ui = { auto: true, linked: { track: true, space: true }, ratio: { ...RATIO }, open: new Set(), compare: false, read: false, focus: false, layout: 'left', vs: 'ragged', gt: 'start', chip: 'underline', opts: 'glide', dd: 'inline', hd: 'block', mk: 'quiet', unit: 'ch', caption: null };
+const ui = { auto: true, linked: { track: true, space: true }, ratio: { ...RATIO }, open: new Set(), compare: false, read: false, focus: false, layout: 'left', vs: 'ragged', gt: 'start', chip: 'underline', opts: 'glide', dd: 'inline', hd: 'stops', mk: 'quiet', rules: 'dashed', unit: 'ch', caption: null };
 // The width the text is set at: the slider's value, or the auto width.
 let measureNow = state.measure;
 // The most indent in ch the width allows.
@@ -353,33 +353,48 @@ const HD = ['block', 'stops', 'idle'];
 // so the gap can shrink as words grow, which no px floor or em share can do. The
 // clamp keeps far sizes sane: never under 1px, or a twentieth of a big word; never
 // over half the word. The thickness is a share of the word's size.
-const UL = { at13: 3, at16: 2, w: .1 };
-const UL_DEF = { ...UL };
-const UL_SLIDERS = {
-  at13: ['at 13 px', 'px', 0, 6, .25],
-  at16: ['at 16 px', 'px', 0, 6, .25],
-  w: ['thickness', 'em', .02, .2, .005],
+// The Tuning group's sliders: [label, unit, min, max, step, default, CSS variable].
+// The key is also the URL parameter. tuneApply() sets each variable; the underline's
+// offset is worked out from its two points instead (--ul). Every spacing in the panel
+// reads one of these, with its default as the fallback.
+const TUNES = {
+  ulat13: ['Underline at 13 px', 'px', 0, 6, .25, 3],
+  ulat16: ['Underline at 16 px', 'px', 0, 6, .25, 5],
+  ulw: ['Underline thickness', 'em', .02, .2, .005, .1, '--ul-w'],
+  gap: ['Between groups', 'rem', 0, 5, .05, 2.55, '--gg'],
+  rows: ['Between rows', 'rem', 0, 2.5, .05, 1, '--rg'],
+  track: ['Label to slider', 'rem', 0, 1.5, .05, .4, '--lt'],
+  gutter: ['Title to options', 'rem', 0, 4, .05, 2.1, '--cg'],
+  sides: ['Panel sides', 'rem', 0, 4, .05, 1.65, '--ps'],
+  top: ['Panel top', 'rem', 0, 4, .05, 1.25, '--pt'],
+  more: ['Above "more"', 'rem', 0, 1.5, .05, 1.25, '--mm'],
+  opt: ['Label to its option', 'rem', 0, 1.5, .05, .55, '--og'],
+  pair: ['After a split pair', 'rem', 0, 2.5, .05, .7, '--pr'],
+  sub: ['Split rows indent', 'rem', 0, 2.5, .05, 1.3, '--si'],
+  ddp: ['Dropdown padding', 'em', 0, 1, .05, .65, '--ddp'],
 };
-const ulSlope = () => +((UL.at16 - UL.at13) / 3).toFixed(4);
-const ulOffset = () => `clamp(max(1px, .05em), calc(${UL.at13}px + (1em - 13px) * ${ulSlope()}), .5em)`;
-const ulSay = () => `${UL.at13}px + (1em − 13px) × ${String(ulSlope()).replace('-', '−')}`;
-function ulApply() {
-  root.style.setProperty('--ul', ulOffset());
-  root.style.setProperty('--ul-w', `${UL.w}em`);
+const TUNE = Object.fromEntries(Object.entries(TUNES).map(([k, t]) => [k, t[5]]));
+const ulSlope = () => +((TUNE.ulat16 - TUNE.ulat13) / 3).toFixed(4);
+const ulSay = () => `${TUNE.ulat13}px + (1em − 13px) × ${String(ulSlope()).replace('-', '−')}`;
+function tuneApply() {
+  root.style.setProperty('--ul', `clamp(max(1px, .05em), calc(${TUNE.ulat13}px + (1em - 13px) * ${ulSlope()}), .5em)`);
+  for (const [k, t] of Object.entries(TUNES)) if (t[6]) root.style.setProperty(t[6], TUNE[k] + t[1]);
 }
-function setUl(k, v) {
-  UL[k] = +v;
-  ulApply();
-  for (const el of document.querySelectorAll(`[data-ul="${k}"]`)) if (+el.value !== UL[k]) el.value = UL[k];
-  for (const el of document.querySelectorAll(`[data-ul-v="${k}"]`)) el.textContent = `${UL[k]} ${UL_SLIDERS[k][1]}`;
+function setTune(k, v) {
+  TUNE[k] = +v;
+  tuneApply();
+  for (const el of document.querySelectorAll(`[data-tune="${k}"]`)) if (+el.value !== TUNE[k]) el.value = TUNE[k];
+  for (const el of document.querySelectorAll(`[data-tune-v="${k}"]`)) el.textContent = `${TUNE[k]} ${TUNES[k][1]}`;
   for (const el of document.querySelectorAll('[data-ul-at]')) el.textContent = ulSay();
-  param('ul' + k, UL[k]);
+  param(k, TUNE[k]);
 }
-document.addEventListener('input', e => { if (e.target.dataset?.ul) setUl(e.target.dataset.ul, e.target.value); });
-document.addEventListener('dblclick', e => { const k = e.target.dataset?.ul; if (k) setUl(k, UL_DEF[k]); });
-const ulHTML = (k, i) => {
-  const [name, unit, min, max, step] = UL_SLIDERS[k];
-  return `<label class="pick"><span class="muted">${i ? '' : 'underline'}</span><span class="ch"><span class="muted">${name}</span><input type="range" data-ul="${k}" min="${min}" max="${max}" step="${step}" value="${UL[k]}" style="--d:${(UL_DEF[k] - min) / (max - min)}" aria-label="Underline ${name}" title="Double-click for ${UL_DEF[k]} ${unit}"><output class="num" data-ul-v="${k}">${UL[k]} ${unit}</output></span></label>`;
+document.addEventListener('input', e => { if (e.target.dataset?.tune) setTune(e.target.dataset.tune, e.target.value); });
+document.addEventListener('dblclick', e => { const k = e.target.dataset?.tune; if (k) setTune(k, TUNES[k][5]); });
+// A slider row as the panel's. Not a .row.range: those reset through CONTROLS; these
+// reset on their own double-click.
+const tuneHTML = k => {
+  const [label, unit, min, max, step, def] = TUNES[k];
+  return `<div class="row tune-row"><span class="lbl"><label for="tune-${k}">${label}</label></span><span class="out"><output class="num" data-tune-v="${k}">${TUNE[k]} ${unit}</output></span><input type="range" id="tune-${k}" data-tune="${k}" min="${min}" max="${max}" step="${step}" value="${TUNE[k]}" style="--d:${(def - min) / (max - min)}" title="Double-click for ${def} ${unit}"></div>`;
 };
 // The mark on a dropdown and on "n more", to try. arrow: ↓ / ↑, as before. chevron:
 // a drawn hairline chevron, quieter. caret: a small solid triangle. plus: + / − for
@@ -388,7 +403,9 @@ const ulHTML = (k, i) => {
 // box says dropdown, and "more" is underlined, as a link. quiet: the user's pick, no
 // mark on dropdowns, a chevron on "more".
 const MK = ['arrow', 'chevron', 'caret', 'plus', 'corner', 'none', 'quiet'];
-const PICKS = [['box', 'gt', GT], ['dropdown', 'dd', DD], ['options', 'opts', OPTS], ['buttons', 'chip', CHIPS], ['header', 'hd', HD], ['marks', 'mk', MK]];
+const PICKS = [['box', 'gt', GT], ['dropdown', 'dd', DD], ['options', 'opts', OPTS], ['buttons', 'chip', CHIPS], ['header', 'hd', HD], ['marks', 'mk', MK], ['rules', 'rules', ['line', 'dashed', 'off']]];
+// Each pick's default, before the URL sets anything, for "copy changes".
+const PICK_DEF = Object.fromEntries(PICKS.map(([, k]) => [k, ui[k]]));
 const coarse = matchMedia('(pointer: coarse)');
 const place = () => ui.opts === 'pointer' ? (coarse.matches ? 'below' : 'value')
   : ui.opts === 'hybrid' || ui.opts === 'glide' ? (coarse.matches ? 'below' : ui.opts) : ui.opts;
@@ -418,11 +435,100 @@ function groupHTML(g) {
   return `<section class="group switched" data-g="${g.id}" aria-labelledby="g-${g.id}"><h2 id="g-${g.id}">${title}</h2><div class="rows">${head}${fold(`data-body="${g.id}"`, body, on)}</div></section>`;
 }
 
+// The prototype's own group: each look to try is a row, its name over its choices,
+// then the underline's sliders. It sits under "reset all", which is the app's.
+const variantsHTML = () => `<section class="group variants" data-g="variants" aria-labelledby="g-variants"><h2 id="g-variants">Variants</h2><div class="rows">${PICKS.map(([name, k, list]) => `<div class="row pick"><span class="lbl">${name[0].toUpperCase() + name.slice(1)}</span><span class="ch">${list.map(t => `<button class="hl" data-${k}="${t}">${t}</button>`).join('<span class="sl">/</span>')}</span></div>`).join('')}</div></section>`;
+// The prototype's sliders: the underline, then every spacing in the panel.
+const SPACES = ['gap', 'rows', 'track', 'gutter', 'sides', 'top', 'more', 'opt', 'pair', 'sub', 'ddp'];
+const tuningHTML = () => `<section class="group tuning" data-g="tuning" aria-labelledby="g-tuning"><h2 id="g-tuning">Tuning</h2><div class="rows"><div class="row note"><span class="sub">Underline</span></div>${['ulat13', 'ulat16', 'ulw'].map(tuneHTML).join('')}<p class="gnote num" data-ul-at>${ulSay()}</p><div class="row note"><span class="sub">Space</span></div>${SPACES.map(tuneHTML).join('')}</div></section>`;
+
 function buildPanel() {
   document.querySelector('.groups').innerHTML = GROUPS.map(groupHTML).join('')
-    + `<div class="foot">${PICKS.map(([name, attr, list]) => `<span class="pick"><span class="muted">${name}</span><span class="ch">${list.map(t => `<button class="hl" data-${attr}="${t}">${t}</button>`).join('<span class="muted">/</span>')}</span></span>`).join('')}${Object.keys(UL_SLIDERS).map(ulHTML).join('')}<span class="pick"><span></span><span class="ch muted num" data-ul-at>${ulSay()}</span></span><button class="hl" data-reset-all>reset all ↺</button></div>`;
+    + '<div class="foot"><button class="hl" data-win title="Variants and tuning (⌥T)">variants</button><button class="hl" data-reset-all>reset all ↺</button></div>';
   document.querySelector('.tabs').innerHTML = GROUPS.map(g => `<button role="tab" data-tab="${g.id}" aria-selected="false">${g.label}</button>`).join('');
 }
+
+/* ---------------------------------------------------------------------------
+   The prototype's own window: Variants and Tuning, floating over the page so the
+   text changes in view while you tune. Drag it by its bar, resize it from its
+   corner, show and hide it with ⌥T (by the key, so any layout) or "variants" at
+   the panel's foot. Where it sits, its size and whether it's open are kept.
+   --------------------------------------------------------------------------- */
+const WIN_KEY = 'unjustified-r3-win';
+const win = { x: 32, y: 88, w: 416, h: 560, open: true };
+try { Object.assign(win, JSON.parse(localStorage.getItem(WIN_KEY)) ?? {}); } catch {}
+const winSave = () => { try { localStorage.setItem(WIN_KEY, JSON.stringify(win)); } catch {} };
+function winPlace() {
+  const el = document.querySelector('.win');
+  // Kept on screen, whatever the window was when it was left.
+  win.x = Math.max(0, Math.min(win.x, innerWidth - Math.min(el.offsetWidth || win.w, innerWidth)));
+  win.y = Math.max(0, Math.min(win.y, innerHeight - 48));
+  el.style.left = win.x + 'px';
+  el.style.top = win.y + 'px';
+}
+function winToggle(open = !win.open) {
+  win.open = open;
+  document.querySelector('.win').hidden = !open;
+  for (const b of document.querySelectorAll('.foot [data-win]')) b.setAttribute('aria-pressed', open);
+  if (open) winPlace();
+  winSave();
+}
+function buildWin() {
+  const el = document.createElement('aside');
+  el.className = 'win';
+  el.setAttribute('aria-label', 'Variants and tuning');
+  el.innerHTML = `<div class="win-bar"><span>Variants · Tuning</span><button class="hl" data-copy title="Copy what differs from the defaults, to paste back">copy changes</button><span class="muted">⌥T</span><button class="hl" data-win aria-label="Hide">×</button></div><div class="win-groups">${variantsHTML()}${tuningHTML()}</div>`;
+  el.style.width = win.w + 'px';
+  el.style.height = win.h + 'px';
+  document.body.append(el);
+  winToggle(win.open);
+  // Drag by the bar.
+  el.querySelector('.win-bar').addEventListener('pointerdown', e => {
+    if (e.button > 0 || e.target.closest('button')) return;
+    const bar = e.currentTarget, dx = e.clientX - win.x, dy = e.clientY - win.y;
+    bar.setPointerCapture(e.pointerId);
+    const move = m => { win.x = m.clientX - dx; win.y = m.clientY - dy; winPlace(); };
+    const up = () => { bar.removeEventListener('pointermove', move); winSave(); };
+    bar.addEventListener('pointermove', move);
+    bar.addEventListener('pointerup', up, { once: true });
+    bar.addEventListener('pointercancel', up, { once: true });
+  });
+  // Its size, as left by the corner.
+  new ResizeObserver(() => {
+    if (el.hidden) return;
+    win.w = el.offsetWidth;
+    win.h = el.offsetHeight;
+    winSave();
+  }).observe(el);
+  addEventListener('resize', () => { if (win.open) winPlace(); });
+}
+// What differs from the defaults, as plain lines to paste back into the chat, with
+// the address that sets it all up again.
+function changesText() {
+  const lines = [];
+  for (const [name, k] of PICKS) if (ui[k] !== PICK_DEF[k]) lines.push(`${name}: ${ui[k]} (default ${PICK_DEF[k]})`);
+  for (const [k, t] of Object.entries(TUNES)) if (TUNE[k] !== t[5]) lines.push(`${t[0]}: ${TUNE[k]} ${t[1]} (default ${t[5]} ${t[1]})`);
+  if (!lines.length) return '';
+  return ['Round 3 variants and tuning, changed from the defaults:', ...lines, '', location.href].join('\n');
+}
+async function copyChanges(b) {
+  const text = changesText();
+  const say = words => { b.textContent = words; setTimeout(() => { b.textContent = 'copy changes'; }, 1600); };
+  if (!text) return say('nothing changed');
+  try { await navigator.clipboard.writeText(text); say('copied'); }
+  catch {
+    // Clipboard refused (no focus, or an old browser): select it in a box instead.
+    const area = Object.assign(document.createElement('textarea'), { value: text });
+    document.body.append(area);
+    area.select();
+    say(document.execCommand('copy') ? 'copied' : 'copy failed');
+    area.remove();
+  }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'KeyT' && e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); winToggle(); }
+});
 
 const NOTES = {
   hyph: () => hasArabic() || hasJapanese() ? 'Arabic and Japanese are not hyphenated: kashida and tracking do that work.' : '',
@@ -532,6 +638,8 @@ document.addEventListener('click', e => {
   else if ('vs' in d) { ui.vs = d.vs; apply(); }
   else if ('master' in d) set(d.master, !state[d.master]);
   else if ('setK' in d) set(d.setK, d.setV === '1');
+  else if ('win' in d) winToggle();
+  else if ('copy' in d) copyChanges(t);
   else if (PICKS.some(([, k]) => k in d)) {
     const [, k] = PICKS.find(([, k]) => k in d);
     ui[k] = d[k];
@@ -972,13 +1080,14 @@ export function start() {
   ui.layout = asked in LAYOUTS ? asked : 'left';
   const q = new URLSearchParams(location.search);
   for (const [, k, list] of PICKS) if (list.includes(q.get(k))) ui[k] = q.get(k);
-  for (const k in UL) if (Number.isFinite(parseFloat(q.get('ul' + k)))) UL[k] = parseFloat(q.get('ul' + k));
-  ulApply();
+  for (const k in TUNE) if (Number.isFinite(parseFloat(q.get(k)))) TUNE[k] = parseFloat(q.get(k));
+  tuneApply();
   coarse.addEventListener('change', refresh);
   root.dataset.layout = ui.layout;
   document.title = `${LAYOUTS[ui.layout]} · round 3 — unjustified lab`;
   document.querySelector('.stage').innerHTML = readingsHTML() + `<div class="pair">${colHTML('u', 'Unjustified')}${colHTML('b', 'Browser')}</div>`;
   buildPanel();
+  buildWin();
   loadSample();
   apply();
   document.fonts.ready.then(() => { layout(); scheduleRender(); });
